@@ -1,0 +1,402 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบเสร็จ - {{ sale.doc_no }}</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        /* ปุ่มด้านบน - ไม่พิมพ์ */
+        .no-print {
+            max-width: 800px;
+            margin: 0 auto 20px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-back {
+            background-color: #6b7280;
+            color: white;
+        }
+
+        .btn-back:hover {
+            background-color: #4b5563;
+        }
+
+        .btn-print {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-print:hover {
+            background-color: #2563eb;
+        }
+
+        /* ใบเสร็จ */
+        .receipt {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .receipt-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .store-name {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .receipt-title {
+            font-size: 20px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        /* ข้อมูลบิล */
+        .receipt-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #4b5563;
+            min-width: 120px;
+        }
+
+        .info-value {
+            color: #1f2937;
+        }
+
+        /* รายการสินค้า */
+        .items-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .item {
+            padding: 15px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .item-number {
+            color: #6b7280;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .item-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            flex: 1;
+        }
+
+        .item-total {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .item-details {
+            display: flex;
+            justify-content: space-between;
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 4px;
+            padding-left: 30px;
+        }
+
+        .item-sku {
+            font-family: 'Courier New', monospace;
+        }
+
+        /* สรุปยอด */
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 16px;
+        }
+
+        .summary-row.subtotal {
+            color: #4b5563;
+        }
+
+        .summary-row.discount {
+            color: #dc2626;
+        }
+
+        .summary-row.total {
+            font-size: 24px;
+            font-weight: 700;
+            color: #059669;
+            padding-top: 15px;
+            margin-top: 10px;
+            border-top: 2px solid #d1d5db;
+        }
+
+        /* ✅ เพิ่ม: Payment Info */
+        .payment-section {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #eff6ff;
+            border-radius: 8px;
+            border: 2px solid #3b82f6;
+        }
+
+        .payment-method {
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+
+        .payment-details {
+            color: #4b5563;
+            font-size: 14px;
+        }
+
+        /* Footer */
+        .receipt-footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .thank-you {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .print-time {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .receipt {
+                box-shadow: none;
+                border-radius: 0;
+                max-width: 100%;
+                padding: 20px;
+            }
+
+            .item {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ปุ่มด้านบน (ไม่พิมพ์) -->
+    <div class="no-print">
+      {% if not is_from_report%}
+            <a href="{% url 'sales' %}" class="btn btn-back">
+                ← กลับหน้าขาย
+            </a>
+        {% endif %}
+        <button onclick="window.print()" class="btn btn-print">
+            🖨️ พิมพ์ใบเสร็จ
+        </button>
+    </div>
+
+    <!-- ใบเสร็จ -->
+    <div class="receipt">
+        
+        <!-- Header -->
+        <div class="receipt-header">
+            <div class="store-name">🏪 ร้านขายอะไหล่ยนต์</div>
+            <div class="receipt-title">ใบเสร็จรับเงิน</div>
+        </div>
+
+        <!-- ข้อมูลบิล -->
+        <div class="receipt-info">
+            <div class="info-row">
+                <span class="info-label">เลขที่บิล:</span>
+                <span class="info-value">{{ sale.doc_no }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">วันที่:</span>
+                <span class="info-value">{{ sale.sale_date|date:"d/m/Y H:i" }} น.</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">พนักงานขาย:</span>
+                <span class="info-value">{{ sale.created_by.username }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">สถานะ:</span>
+                <span class="info-value">
+                    {% if sale.status == 'POSTED' %}
+                        ✅ ยืนยันแล้ว
+                    {% elif sale.status == 'DRAFT' %}
+                        📝 ฉบับร่าง
+                    {% else %}
+                        ❌ ยกเลิก
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- รายการสินค้า -->
+        <div class="items-section">
+            <div class="section-title">รายการสินค้า</div>
+            
+            {% for item in items %}
+            <div class="item">
+                <div class="item-header">
+                    <div style="display: flex; flex: 1;">
+                        <span class="item-number">{{ forloop.counter }}.</span>
+                        <span class="item-name">{{ item.product.name }}</span>
+                    </div>
+                    <span class="item-total">{{ item.line_total|floatformat:2 }} ฿</span>
+                </div>
+                <div class="item-details">
+                    <span class="item-sku">SKU: {{ item.product.sku }}</span>
+                    <span>{{ item.quantity|floatformat:0 }} {{ item.product.unit }} x {{ item.unit_price|floatformat:2 }} ฿</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- สรุปยอด -->
+        <div class="summary">
+            <div class="summary-row subtotal">
+                <span>ยอดรวม:</span>
+                <span>{{ sale.total_amount|floatformat:2 }} ฿</span>
+            </div>
+            
+            {% if sale.discount_amount > 0 %}
+            <div class="summary-row discount">
+                <span>ส่วนลด:</span>
+                <span>-{{ sale.discount_amount|floatformat:2 }} ฿</span>
+            </div>
+            {% endif %}
+            
+            <div class="summary-row total">
+                <span>ยอดชำระทั้งสิ้น:</span>
+                <span>{{ sale.grand_total|floatformat:2 }} ฿</span>
+            </div>
+        </div>
+
+        <!-- ✅ เพิ่ม: ข้อมูลการชำระเงิน -->
+        {% if sale.payment %}
+        <div class="payment-section">
+            <div class="payment-method">
+                <span>วิธีชำระเงิน:</span>
+                <span>{{ payment_method_display }}</span>
+            </div>
+            
+            {% if sale.payment.method == 'cash' %}
+            <div class="payment-details">
+                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                    <span>รับเงิน:</span>
+                    <span>{{ sale.payment.received|floatformat:2 }} ฿</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                    <span>เงินทอน:</span>
+                    <span>{{ sale.payment.change|floatformat:2 }} ฿</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="receipt-footer">
+            <div class="thank-you">ขอบคุณที่ใช้บริการ</div>
+            <div class="print-time">พิมพ์เมื่อ: {{ print_date|date:"d/m/Y H:i:s" }}</div>
+        </div>
+
+    </div>
+
+</body>
+</html>

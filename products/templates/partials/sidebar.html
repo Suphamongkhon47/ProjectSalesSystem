@@ -1,0 +1,157 @@
+{# ========== Sidebar Component (ฟอนต์ใหญ่ + อีโมจิ, กดแล้วกางแบบเดิม) ========== #}
+<aside class="w-72 flex-shrink-0 text-white bg-gradient-to-b from-blue-700 via-blue-600 to-blue-700 shadow-xl relative">
+  
+  {# ส่วนหัว #}
+  <div class="px-6 py-6 border-b border-white/15 relative z-10 bg-blue-700">
+    <div class="flex items-center gap-3 mb-2">
+      <div class="avatar placeholder">
+        <div class="bg-white text-blue-700 rounded-full w-12 h-12 flex items-center justify-center">
+          <span class="text-xl font-bold">{{ request.user.username.0|upper|default:"A" }}</span>
+        </div>
+      </div>
+      <div>
+        <div class="text-base font-bold">{{ request.user.username|default:"ADMIN" }}</div>
+        
+        <div class="text-xs opacity-90">
+          {% if request.user.is_superuser %}
+            👑 เจ้าของธุรกิจ
+          {% else %}
+            👨‍💼 พนักงานทั่วไป
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    {# Logout Button #}
+    <a href="{% url 'logout' %}" 
+       class="btn btn-sm btn-ghost w-full gap-2 text-white hover:bg-white/20">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+      </svg>
+      ออกจากระบบ
+    </a>
+  </div>
+
+  <nav class="py-2 text-base relative z-0">
+    {% with urlname=request.resolver_match.url_name %}
+
+    {# Dashboard #}
+    <a href="{% url 'home_dashboard' %}"
+       class="flex items-center gap-4 px-6 py-4 border-b border-white/10 transition-all duration-200 hover:bg-white/15
+              {% if urlname == 'home_dashboard' %}bg-white/15{% endif %}">
+      <span class="w-7 text-2xl">📊</span>
+      <span class="font-medium">แดชบอร์ด</span>
+    </a>
+
+    {# ขายสินค้า #}
+    <a href="{% url 'sales' %}"
+       class="flex items-center gap-4 px-6 py-4 border-b border-white/10 transition-all duration-200 hover:bg-white/15
+              {% if urlname == 'sales' %}bg-white/15{% endif %}">
+      <span class="w-7 text-2xl">🛒</span>
+      <span class="font-medium">ขายสินค้า</span>
+    </a>
+
+    <a href="{% url 'return_home' %}"
+       class="flex items-center gap-4 px-6 py-4 border-b border-white/10 transition-all duration-200 hover:bg-white/15
+              {% if urlname == 'return_home' %}bg-white/15{% endif %}">
+      <span class="w-7 text-2xl">🔄</span>
+      <span class="font-medium">รับคืนสินค้า</span>
+    </a>
+
+    {# นำเข้าสินค้า (Dropdown) #}
+    {% if user.is_superuser %}
+
+        <div class="collapse collapse-arrow border-b border-white/10">
+          <input type="checkbox" class="peer min-h-0"
+                {% if urlname == 'import_product_manual' or urlname == 'import_product_file' %}checked{% endif %}>
+          
+          <div class="collapse-title min-h-0 flex items-center gap-4 px-6 py-4 hover:bg-white/20 transition-all duration-200">
+            <span class="w-7 text-2xl">📦</span>
+            <span class="font-medium">นำเข้าสินค้า</span>
+          </div>
+          
+          <div class="collapse-content px-0 pb-0">
+            <ul class="menu p-0">
+              <li>
+                <a href="{% url 'import_product_manual' %}" 
+                  class="flex items-center gap-3 py-3 pl-14 pr-6 transition-all duration-200 rounded-none border-l-4
+                          {% if urlname == 'import_product_manual' %}bg-white/10 border-white/30{% else %}border-transparent hover:bg-white/10 hover:border-white/30{% endif %}">
+                  <span class="text-xl">✏️</span>
+                  <span class="font-medium">กรอกด้วยตนเอง</span>
+                </a>
+              </li>
+              <li>
+                <a href="{% url 'import_product_file' %}" 
+                  class="flex items-center gap-3 py-3 pl-14 pr-6 transition-all duration-200 rounded-none border-l-4
+                          {% if urlname == 'import_product_file' %}bg-white/10 border-white/30{% else %}border-transparent hover:bg-white/10 hover:border-white/30{% endif %}">
+                  <span class="text-xl">📄</span>
+                  <span class="font-medium">อัปโหลดไฟล์</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div> 
+
+    {% endif %}
+
+    {# จัดการสินค้า #}
+    {% if user.is_superuser %}
+      <a href="{% url 'manage_products' %}" 
+        class="flex items-center gap-4 px-6 py-4 border-b border-white/10 transition-all duration-200 hover:bg-white/15
+                {% if urlname == 'manage_products' %}bg-white/15{% endif %}">
+        <span class="w-7 text-2xl">📚</span>
+        <span class="font-medium">จัดการสินค้า</span>
+      </a>
+    {% endif %}
+
+    {# รายงาน (Dropdown) - ✅ เพิ่มรายงานการขาย #}
+    <div class="collapse collapse-arrow border-b border-white/10">
+      <input type="checkbox" class="peer min-h-0"
+             {% if urlname == 'purchase_report' or urlname == 'purchase_detail' or urlname == 'sales_report' %}checked{% endif %}>
+      
+      <div class="collapse-title min-h-0 flex items-center gap-4 px-6 py-4 hover:bg-white/20 transition-all duration-200
+                  {% if urlname == 'purchase_report' or urlname == 'purchase_detail' or urlname == 'sales_report' %}bg-white/10{% endif %}">
+        <span class="w-7 text-2xl">📊</span>
+        <span class="font-medium">รายงาน</span>
+      </div>
+      
+      <div class="collapse-content px-0 pb-0">
+        <ul class="menu p-0">
+          
+          {# ✅ รายงานการขาย (เพิ่มใหม่) #}
+          <li>
+            <a href="{% url 'sales_report' %}" 
+               class="flex items-center gap-3 py-3 pl-14 pr-6 transition-all duration-200 rounded-none border-l-4
+                      {% if urlname == 'sales_report' %}bg-white/10 border-white/30{% else %}border-transparent hover:bg-white/10 hover:border-white/30{% endif %}">
+              <span class="text-xl">💰</span>
+              <span class="font-medium">รายงานการขาย</span>
+            </a>
+          </li>
+
+          {# รายงานการนำเข้า #}
+          {% if user.is_superuser %}
+            <li>
+              <a href="{% url 'purchase_report' %}" 
+                class="flex items-center gap-3 py-3 pl-14 pr-6 transition-all duration-200 rounded-none border-l-4
+                        {% if urlname == 'purchase_report' or urlname == 'purchase_detail' %}bg-white/10 border-white/30{% else %}border-transparent hover:bg-white/10 hover:border-white/30{% endif %}">
+                <span class="text-xl">📥</span>
+                <span class="font-medium">รายงานการนำเข้า</span>
+              </a>
+            </li>
+          {% endif %}
+          
+          <li>
+            <a href="{% url 'return_list' %}" 
+              class="flex items-center gap-3 py-3 pl-14 pr-6 transition-all duration-200 rounded-none border-l-4
+                      {% if urlname == 'return_list' %}bg-white/10 border-white/30{% else %}border-transparent hover:bg-white/10 hover:border-white/30{% endif %}">
+              <span class="text-xl">↩️</span>
+              <span class="font-medium">รายงานการคืนสินค้า</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+    
+    {% endwith %}
+  </nav>
+</aside>

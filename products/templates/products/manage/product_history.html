@@ -1,0 +1,267 @@
+{% load tailwind_tags %}
+{% load humanize %}
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ประวัติการเคลื่อนไหวสต็อก - {{ product.name }}</title>
+  {% tailwind_css %}
+</head>
+<body class="bg-base-200">
+
+<div class="flex min-h-screen">
+
+  {# ========== Sidebar ========== #}
+  {% include "partials/sidebar.html" %}
+
+  {# ========== Main Content ========== #}
+  <main class="flex-1 p-8 overflow-y-auto">
+    <div class="max-w-[1800px] mx-auto">
+      
+      {# ========== Header ========== #}
+      <div class="mb-8">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <a href="{% url 'manage_products' %}" class="btn btn-circle btn-ghost">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </a>
+            <div>
+              <h1 class="text-4xl font-bold text-gray-800 mb-2">📜 ประวัติการเคลื่อนไหวสต็อก</h1>
+              <p class="text-gray-600">ตรวจสอบรายการ รับเข้า-ขายออก ของสินค้า</p>
+            </div>
+          </div>
+          
+          {# ปุ่มพิมพ์ #}
+          <button onclick="window.print()" class="btn btn-outline btn-primary gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            พิมพ์รายงาน
+          </button>
+        </div>
+      </div>
+
+      {# Messages #}
+      {% include "partials/messages.html" %}
+
+      {# ========== ข้อมูลสินค้าและสรุปยอด ========== #}
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        
+        {# การ์ดซ้าย: รายละเอียดสินค้า #}
+        <div class="card bg-white shadow-xl lg:col-span-2">
+          <div class="card-body">
+            <div class="flex gap-6 items-start">
+              {# รูปสินค้า #}
+              <div class="avatar">
+                <div class="w-24 h-24 rounded-xl ring ring-primary ring-offset-base-100 ring-offset-2">
+                  {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" />
+                  {% else %}
+                    <div class="bg-gradient-to-br from-gray-200 to-gray-300 w-full h-full flex items-center justify-center text-gray-400 text-3xl">
+                      📦
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+              
+              {# ข้อมูล text #}
+              <div class="flex-1">
+                <h2 class="card-title text-2xl text-gray-800">{{ product.name }}</h2>
+                <div class="badge badge-primary badge-outline mt-2">{{ product.category.name|default:"ไม่ระบุหมวดหมู่" }}</div>
+                
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <span class="text-gray-500 text-sm block">รหัสสินค้า (SKU)</span>
+                    <span class="font-mono font-bold text-lg">{{ product.sku }}</span>
+                  </div>
+                  <div>
+                    <span class="text-gray-500 text-sm block">ราคาขาย</span>
+                    <span class="font-bold text-primary text-lg">{{ product.selling_price|intcomma }} ฿</span>
+                  </div>
+                  <div>
+                    <span class="text-gray-500 text-sm block">ต้นทุน</span>
+                    <span class="font-bold text-lg">{{ product.cost_price|intcomma }} ฿</span>
+                  </div>
+                  <div>
+                    <span class="text-gray-500 text-sm block">หน่วยนับ</span>
+                    <span class="font-bold text-lg">{{ product.unit }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# การ์ดขวา: สรุปตัวเลข (Stats) #}
+        <div class="card bg-white shadow-xl">
+          <div class="card-body p-0">
+            <div class="stats stats-vertical shadow">
+              
+              <div class="stat bg-gradient-to-br from-blue-50 to-blue-100 border-b border-blue-200">
+                <div class="stat-figure text-primary">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </div>
+                <div class="stat-title font-semibold">📦 สต็อกปัจจุบัน</div>
+                <div class="stat-value text-primary text-4xl">{{ current_stock|intcomma }}</div>
+                <div class="stat-desc text-gray-600 font-medium">{{ product.unit }}</div>
+              </div>
+              
+              <div class="stat bg-gradient-to-br from-green-50 to-green-100 border-b border-green-200">
+                <div class="stat-figure text-success">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                  </svg>
+                </div>
+                <div class="stat-title font-semibold">รับเข้าทั้งหมด</div>
+                <div class="stat-value text-success text-3xl">+{{ total_in|intcomma }}</div>
+                <div class="stat-desc text-gray-600">IN</div>
+              </div>
+              
+              <div class="stat bg-gradient-to-br from-red-50 to-red-100">
+                <div class="stat-figure text-error">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+                  </svg>
+                </div>
+                <div class="stat-title font-semibold">ขายออกทั้งหมด</div>
+                <div class="stat-value text-error text-3xl">-{{ total_out|intcomma }}</div>
+                <div class="stat-desc text-gray-600">OUT</div>
+              </div>
+              
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ========== ตารางประวัติ ========== #}
+      <div class="card bg-white shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">📋 ประวัติการเคลื่อนไหว</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra table-sm">
+              <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>วัน/เวลา</th>
+                  <th class="text-center">ประเภท</th>
+                  <th>เอกสารอ้างอิง</th>
+                  <th class="text-right">จำนวน</th>
+                  <th class="text-right">ต้นทุน/หน่วย</th>
+                  <th class="text-right">คงเหลือหลังทำรายการ</th>
+                  <th>หมายเหตุ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for movement in movements %}
+                <tr class="hover">
+                  {# ลำดับ #}
+                  <td class="text-center text-gray-600">{{ forloop.counter }}</td>
+                  
+                  {# วันที่ #}
+                  <td>
+                    <div class="font-semibold">{{ movement.created_at|date:"d/m/Y" }}</div>
+                    <div class="text-xs text-gray-500">{{ movement.created_at|date:"H:i" }} น.</div>
+                  </td>
+
+                  {# ประเภทรายการ (IN/OUT) #}
+                  <td class="text-center">
+                    {% if movement.movement_type == 'IN' %}
+                      <span class="badge badge-success badge-sm gap-1">
+                        📥 รับเข้า
+                      </span>
+                    {% elif movement.movement_type == 'OUT' %}
+                      <span class="badge badge-error badge-sm gap-1">
+                        📤 ขายออก
+                      </span>
+                    {% else %}
+                      <span class="badge badge-ghost badge-sm gap-1">
+                        🔄 ปรับปรุง
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  {# เอกสารอ้างอิง #}
+                  <td>
+                    {% if movement.reference %}
+                      <span class="font-mono text-sm font-semibold text-primary">{{ movement.reference }}</span>
+                    {% else %}
+                      <span class="text-gray-400">-</span>
+                    {% endif %}
+                  </td>
+
+                  {# จำนวนที่เปลี่ยนแปลง #}
+                  <td class="text-right font-bold text-lg">
+                    {% if movement.movement_type == 'IN' %}
+                      <span class="text-success">+{{ movement.quantity|intcomma }}</span>
+                    {% else %}
+                      <span class="text-error">-{{ movement.quantity|intcomma }}</span>
+                    {% endif %}
+                  </td>
+
+                  {# ต้นทุน #}
+                  <td class="text-right text-gray-600">
+                    {% if movement.cost %}
+                      {{ movement.cost|floatformat:2|intcomma }} ฿
+                    {% else %}
+                      <span class="text-gray-400">-</span>
+                    {% endif %}
+                  </td>
+
+                  {# คงเหลือ (Balance) #}
+                  <td class="text-right font-mono font-bold text-blue-600">
+                    {{ movement.balance_after|intcomma }}
+                  </td>
+
+                  {# หมายเหตุ #}
+                  <td class="text-gray-500 text-sm">
+                    {{ movement.note|default:"-" }}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="8" class="text-center py-12">
+                    <div class="flex flex-col items-center">
+                      <div class="text-6xl mb-4">📭</div>
+                      <div class="text-xl font-semibold text-gray-600 mb-2">ยังไม่มีประวัติการเคลื่อนไหว</div>
+                      <div class="text-sm text-gray-500">เมื่อมีการรับเข้าหรือขายออก จะแสดงที่นี่</div>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+{# ========== Print Styles ========== #}
+<style>
+  @media print {
+    .no-print, aside, .btn {
+      display: none !important;
+    }
+    
+    main {
+      padding: 20px !important;
+    }
+    
+    .card {
+      box-shadow: none !important;
+      border: 1px solid #e5e7eb !important;
+    }
+  }
+</style>
+
+</body>
+</html>

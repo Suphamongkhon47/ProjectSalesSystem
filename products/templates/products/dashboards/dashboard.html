@@ -1,0 +1,456 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Dashboard - {% if is_owner %}Owner{% else %}Staff{% endif %}</title>
+    {% load tailwind_tags %}
+    {% tailwind_css %}
+</head>
+<body class="bg-base-200">
+<div class="flex min-h-screen">
+    
+    {# Sidebar #}
+    {% include "partials/sidebar.html" %}
+    
+    {# Main Content #}
+    <main class="flex-1 p-6">
+        
+        {# Header #}
+        <div class="mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-bold">📊 Dashboard</h1>
+                <p class="text-gray-600">
+                    สวัสดี, <span class="font-bold text-primary">{{ request.user.username }}</span>
+                </p>
+            </div>
+
+            {# ✅ ส่วนเลือกวันที่ #}
+            <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm">
+                
+                {# ปุ่มย้อนกลับ 1 วัน: ใช้ตัวแปร prev_date #}
+                <a href="?date={{ prev_date|date:'Y-m-d' }}" class="btn btn-square btn-sm btn-ghost">
+                    ❮
+                </a>
+
+                {# Form เลือกวันที่ #}
+                <form action="" method="get" class="flex items-center gap-2">
+                    <div class="form-control">
+                        <input type="date" 
+                            name="date" 
+                            value="{{ report_date|date:'Y-m-d' }}" 
+                            class="input input-bordered input-sm"
+                            onchange="this.form.submit()"> 
+                    </div>
+                </form>
+
+                {# ปุ่มไปวันถัดไป: ใช้ตัวแปร next_date #}
+                <a href="?date={{ next_date|date:'Y-m-d' }}" class="btn btn-square btn-sm btn-ghost">
+                    ❯
+                </a>
+                
+                {# ปุ่มกลับมาวันนี้ #}
+                <a href="{% url 'home_dashboard' %}" class="btn btn-sm btn-primary ml-2">วันนี้</a>
+            </div>
+
+            <div>
+                {% if is_owner %}
+                    <span class="badge badge-primary badge-lg">👑 ผู้จัดการ/เจ้าของ</span>
+                {% else %}
+                    <span class="badge badge-info badge-lg">👤 พนักงานขาย</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        {# Stats Cards #}
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            
+            {# CARD 1: Main Metric #}
+            <div class="card {% if is_owner %}bg-gradient-to-br from-blue-600 to-blue-700{% else %}bg-gradient-to-br from-cyan-500 to-cyan-600{% endif %} text-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-sm opacity-90">
+                        {% if is_owner %}💰 ยอดขายวันนี้{% else %}📦 บิลที่เปิดวันนี้{% endif %}
+                    </h2>
+                    <p class="text-3xl font-bold">
+                        {% if is_owner %}
+                            {{ today_sales_money|floatformat:0|intcomma }} ฿
+                        {% else %}
+                            {{ today_bills|default:0 }} ใบ
+                        {% endif %}
+                    </p>
+                    <div class="text-sm opacity-90">
+                        {% if is_increase %}
+                            <span class="text-green-200">↗ +{{ change_percent|floatformat:1 }}%</span>
+                        {% else %}
+                            <span class="text-red-200">↘ {{ change_percent|floatformat:1 }}%</span>
+                        {% endif %}
+                        จากเมื่อวาน
+                    </div>
+                </div>
+            </div>
+            
+            {# CARD 2: Profit/Items #}
+            <div class="card {% if is_owner %}bg-gradient-to-br from-purple-600 to-purple-700{% else %}bg-gradient-to-br from-orange-500 to-orange-600{% endif %} text-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-sm opacity-90">
+                        {% if is_owner %}📈 กำไรวันนี้{% else %}🔧 สินค้าที่ขาย{% endif %}
+                    </h2>
+                    <p class="text-3xl font-bold">
+                        {% if is_owner %}
+                            {{ today_profit|floatformat:0|intcomma }} ฿
+                        {% else %}
+                            {{ today_items_count|default:0 }} ชิ้น
+                        {% endif %}
+                    </p>
+                    <div class="text-sm opacity-90">
+                        {% if is_owner %}
+                            {{ today_profit_margin|floatformat:1 }}% Margin
+                        {% else %}
+                            ความขยันในการจัดของ
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            {# CARD 3: Bills/Goal #}
+            <div class="card bg-gradient-to-br from-gray-700 to-gray-800 text-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-sm opacity-90">
+                        {# เปลี่ยนชื่อหัวข้อให้ชัดเจน #}
+                        {% if is_owner %}🧾 จำนวนบิลรวม{% else %}🎯 ยอดขายของฉัน{% endif %}
+                    </h2>
+                    <p class="text-3xl font-bold">
+                        {% if is_owner %}
+                            {{ today_bills|default:0 }} บิล
+                        {% else %}
+                            {# ✅ แก้ตรงนี้: ดึงยอดเงินมาแสดง (มีลูกน้ำคั่น) #}
+                            {{ today_sales_money|floatformat:0|intcomma }} ฿
+                        {% endif %}
+                    </p>
+                    <div class="text-sm opacity-90">
+                        {% if is_owner and today_bills > 0 %}
+                            เฉลี่ย: {% widthratio today_sales_money today_bills 1 %} ฿/บิล
+                        {% elif is_owner %}
+                            รอบิลแรก
+                        {% else %}
+                            {# ข้อความให้กำลังใจพนักงาน #}
+                            สู้ๆ ครับ✌️
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            {# CARD 4: Discount/Motivate #}
+            {% if is_owner %}
+            <div class="card bg-gradient-to-br from-red-500 to-red-600 text-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-sm opacity-90">🎁 ส่วนลดที่ให้ไป</h2>
+                    <p class="text-3xl font-bold">{{ today_sales.total_discount|floatformat:0|default:0|intcomma }} ฿</p>
+                    <div class="text-sm opacity-90">ส่วนลดท้ายบิล</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card bg-base-100 shadow-xl border border-base-300">
+                <div class="card-body flex items-center justify-center text-gray-400">
+                    <div class="text-center">
+                        <div class="text-2xl">💪</div>
+                        <div class="text-sm">สู้ๆ ครับ</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+        </div>
+        
+        {# ✅ แถบแจ้งเตือนสต็อก (เฉพาะ Owner) #}
+        {% if is_owner and low_stock_count > 0 or out_of_stock_count > 0 %}
+        <div class="alert alert-warning shadow-lg mb-6">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">⚠️ แจ้งเตือนสต็อก!</h3>
+                    <div class="text-sm">
+                        {% if low_stock_count > 0 %}
+                            มีสินค้า <strong>{{ low_stock_count }}</strong> รายการ ที่สต็อกต่ำ (≤10 ชิ้น)
+                        {% endif %}
+                        {% if out_of_stock_count > 0 %}
+                            {% if low_stock_count > 0 %}และ{% endif %}
+                            <strong class="text-error">{{ out_of_stock_count }}</strong> รายการหมดสต็อก
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="flex-none">
+                <a href="#low-stock-section" class="btn btn-sm btn-ghost">ดูรายการ ↓</a>
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Content Grid #}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {# Chart: ยอดขาย 7 วัน #}
+            <div class="card bg-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title flex justify-between">
+                        <span>
+                            {% if is_owner %}📈 แนวโน้มยอดขาย (บาท){% else %}📊 สถิติการเปิดบิล (ใบ){% endif %}
+                        </span>
+                        <span class="text-sm font-normal text-gray-500">7 วันล่าสุด</span>
+                    </h2>
+                    
+                    <div class="flex items-end justify-between h-48 mt-6 pb-2 border-b border-gray-200">
+                        {% for day in last_7_days %}
+                        <div class="flex flex-col items-center flex-1 group relative">
+                            <div class="opacity-0 group-hover:opacity-100 absolute bottom-full mb-2 bg-gray-800 text-white text-xs rounded py-1 px-2 transition-opacity whitespace-nowrap z-10">
+                                {{ day.total|floatformat:0|intcomma }} {% if is_owner %}฿{% else %}ใบ{% endif %}
+                            </div>
+                            
+                            <div class="w-full mx-1 rounded-t transition-all hover:opacity-80 
+                                        {% if is_owner %}bg-blue-500{% else %}bg-cyan-500{% endif %}"
+                                 style="height: {% if day.total > 0 %}{{ day.total|floatformat:0|add:20 }}px{% else %}4px{% endif %}; max-height: 160px;">
+                            </div>
+                            
+                            <div class="text-xs mt-2 text-gray-500 font-medium">{{ day.day_name }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            {# Table: TOP 5 สินค้า #}
+            <div class="card bg-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title">
+                        {% if is_owner %}🔥 สินค้าทำเงินวันนี้{% else %}🔧 สินค้าออกเยอะวันนี้{% endif %}
+                    </h2>
+                    
+                    <div class="overflow-x-auto mt-4">
+                        <table class="table w-full">
+                            <thead>
+                                <tr>
+                                    <th class="w-10">#</th>
+                                    <th>สินค้า</th>
+                                    <th class="text-right">
+                                        {% if is_owner %}ยอดขาย{% else %}จำนวน{% endif %}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in top_products_today %}
+                                <tr class="hover">
+                                    <th>{{ forloop.counter }}</th>
+                                    <td>
+                                        <div class="font-bold">{{ product.product__name }}</div>
+                                        <div class="text-xs text-gray-500">SKU: {{ product.product__sku }}</div>
+                                    </td>
+                                    <td class="text-right">
+                                        {% if is_owner %}
+                                            <div class="font-bold text-success">{{ product.total_amount|floatformat:0|intcomma }} ฿</div>
+                                            <div class="text-xs text-gray-500">{{ product.total_qty|floatformat:0 }} ชิ้น</div>
+                                        {% else %}
+                                            <div class="font-bold text-primary">{{ product.total_qty|floatformat:0 }} ชิ้น</div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-gray-500 py-8">
+                                        ยังไม่มีรายการขายวันนี้
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="card-actions justify-end mt-4">
+                        <a href="{% url 'daily_top_products' %}" class="btn btn-ghost btn-sm">
+                            ดูทั้งหมด →
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            {# Payment Methods #}
+            <div class="card bg-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title flex justify-between">
+                        <span>
+                            {% if is_owner %}💳 รายการรับเงินล่าสุด{% else %}💰 รายการที่ฉันรับเงิน{% endif %}
+                        </span>
+                        <span class="text-xs font-normal text-gray-500">วันนี้</span>
+                    </h2>
+                    
+                    <div class="space-y-3 mt-4">
+                        {% for payment in recent_payments %}
+                        <div class="flex items-center justify-between p-3 bg-base-100 rounded-lg border border-base-200">
+                            
+                            <div class="flex items-center gap-3">
+                                {# ไอคอนตามประเภท #}
+                                {% if payment.method == 'cash' %}
+                                    <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl" title="เงินสด">💵</div>
+                                {% elif payment.method == 'qr' %}
+                                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl" title="QR Code">📱</div>
+                                {% else %}
+                                    <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-xl" title="โอนเงิน">🏦</div>
+                                {% endif %}
+                                
+                                <div>
+                                    <div class="font-bold text-sm">
+                                        {# แสดงเลขที่บิล #}
+                                        {{ payment.sale.doc_no|default:"-" }}
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        {# แสดงเวลา และ วิธีชำระ #}
+                                        {{ payment.created_at|date:"H:i" }} น. • 
+                                        {% if payment.method == 'cash' %}เงินสด
+                                        {% elif payment.method == 'qr' %}QR Code
+                                        {% else %}โอนเงิน{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-right">
+                                <div class="font-bold text-lg text-primary">
+                                    {{ payment.amount|floatformat:0|intcomma }} ฿
+                                </div>
+                                
+                                {# ถ้าเป็นเจ้าของ ให้เห็นชื่อคนขายด้วย #}
+                                {% if is_owner %}
+                                    <div class="text-[10px] text-gray-400">
+                                        โดย: {{ payment.sale.created_by.username }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center text-gray-500 py-6">
+                            ยังไม่มีรายการรับเงินวันนี้
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="card-actions justify-end mt-2">
+                        <a href="{% url 'sale_list' %}" class="btn btn-ghost btn-xs">ดูประวัติทั้งหมด →</a>
+                    </div>
+                </div>
+            </div>
+
+            {# Quick Links #}
+            <div class="card bg-white shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title">🔗 เมนูด่วน</h2>
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <a href="{% url 'sales' %}" class="btn btn-primary">
+                            🛒 ขายสินค้า (POS)
+                        </a>
+                        <a href="{% url 'sale_list' %}" class="btn btn-outline">
+                            📋 ประวัติบิล
+                        </a>
+                        <a href="{% url 'daily_top_products' %}" class="btn btn-outline">
+                            🔥 สินค้าขายดี
+                        </a>
+                        {% if is_owner %}
+                        <a href="{% url 'sales_summary' %}" class="btn btn-outline">
+                            📊 สรุปยอดขาย
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            {# ✅ สต็อกสินค้าต่ำ/หมด (เฉพาะ Owner) #}
+            {% if is_owner %}
+            <div class="card bg-white shadow-xl lg:col-span-2" id="low-stock-section">
+                <div class="card-body">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="card-title">⚠️ สินค้าสต็อกต่ำ / หมดสต็อก</h2>
+                        <div class="flex gap-2">
+                            {% if low_stock_count > 0 %}
+                                <div class="badge badge-warning badge-lg">{{ low_stock_count }} รายการ</div>
+                            {% endif %}
+                            {% if out_of_stock_count > 0 %}
+                                <div class="badge badge-error badge-lg">{{ out_of_stock_count }} หมด</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="table table-zebra w-full">
+                            <thead>
+                                <tr>
+                                    <th class="w-10">#</th>
+                                    <th>SKU</th>
+                                    <th>สินค้า</th>
+                                    <th class="text-right">สต็อกคงเหลือ</th>
+                                    <th class="text-right">มูลค่า (บาท)</th>
+                                    <th class="text-center">สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in low_stock_products %}
+                                <tr class="{% if product.quantity == 0 %}bg-red-50{% endif %}">
+                                    <th>{{ forloop.counter }}</th>
+                                    <td class="font-mono text-xs">{{ product.sku }}</td>
+                                    <td>
+                                        <div class="font-bold">{{ product.name }}</div>
+                                        {% if product.category %}
+                                            <div class="text-xs text-gray-500">{{ product.category.name }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        <span class="font-bold {% if product.quantity == 0 %}text-error{% elif product.quantity <= 5 %}text-warning{% endif %}">
+                                            {{ product.quantity|floatformat:0 }} {{ product.unit }}
+                                        </span>
+                                    </td>
+                                    <td class="text-right text-sm">
+                                        {% widthratio product.quantity 1 product.cost_price %} ฿
+                                    </td>
+                                    <td class="text-center">
+                                        {% if product.quantity == 0 %}
+                                            <span class="badge badge-error">หมด</span>
+                                        {% elif product.quantity <= 5 %}
+                                            <span class="badge badge-warning">ต่ำมาก</span>
+                                        {% else %}
+                                            <span class="badge badge-warning">ต่ำ</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-gray-500 py-8">
+                                        <div class="text-2xl mb-2">✅</div>
+                                        <div>สต็อกสินค้าปกติดี ไม่มีรายการต่ำ</div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if low_stock_products or out_of_stock_count > 0 %}
+                    <div class="card-actions justify-between mt-4">
+                        <div class="text-sm text-gray-600">
+                            💡 <strong>เคล็ดลับ:</strong> มูลค่าสินค้าคงคลังทั้งหมด: <strong class="text-primary">{{ inventory_value|floatformat:0|intcomma }} ฿</strong>
+                        </div>
+                        <a href="{% url 'import_product' %}" class="btn btn-warning btn-sm">
+                            📦 สั่งซื้อสินค้าเพิ่ม
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+        </div>
+        
+    </main>
+    
+</div>
+</body>
+</html>

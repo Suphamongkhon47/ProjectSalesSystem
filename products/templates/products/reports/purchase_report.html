@@ -1,0 +1,251 @@
+{% load tailwind_tags %}
+{% load humanize %}
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>รายงานการนำเข้าสินค้า</title>
+  {% tailwind_css %}
+</head>
+<body class="bg-base-200">
+
+<div class="flex min-h-screen">
+
+  {# ========== Sidebar ========== #}
+  {% include "partials/sidebar.html" %}
+
+  {# ========== Main Content ========== #}
+  <main class="flex-1 p-8 overflow-y-auto">
+    <div class="max-w-[1800px] mx-auto">
+      
+      {# Header #}
+      <div class="mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">📊 รายงานการนำเข้าสินค้า</h1>
+            <p class="text-gray-600">ดูรายการเอกสารรับเข้าทั้งหมด</p>
+          </div>
+        </div>
+      </div>
+
+      {# Messages #}
+      {% include "partials/messages.html" %}
+
+      {# ========== สถิติ ========== #}
+      <div class="stats shadow mb-6 w-full">
+        <div class="stat">
+          <div class="stat-figure text-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div class="stat-title">เอกสารทั้งหมด</div>
+          <div class="stat-value text-primary">{{ stats.total_purchases|default:0 }}</div>
+          <div class="stat-desc">รายการ</div>
+        </div>
+
+        <div class="stat">
+          <div class="stat-figure text-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <div class="stat-title">จำนวนรายการ</div>
+          <div class="stat-value text-secondary">{{ stats.total_items|floatformat:0|default:0 }}</div>
+          <div class="stat-desc">ชิ้น</div>
+        </div>
+
+        <div class="stat">
+          <div class="stat-figure text-accent">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="stat-title">มูลค่ารวม</div>
+          <div class="stat-value text-accent">{{ stats.total_amount|default:0|floatformat:2|intcomma }}</div>
+          <div class="stat-desc">บาท</div>
+        </div>
+      </div>
+
+      {# ========== ค้นหาและกรอง ========== #}
+      <div class="card bg-white shadow-xl mb-6">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">🔍 ค้นหาและกรอง</h2>
+          
+          <form method="get" class="space-y-4">
+            <div class="grid md:grid-cols-5 gap-4">
+              {# ค้นหา #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">🔍 ค้นหา</span>
+                </label>
+                <input type="text" name="search" class="input input-bordered" 
+                       placeholder="เลขที่ / ซัพพลายเออร์" value="{{ search }}">
+              </div>
+
+              {# วันที่เริ่มต้น #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">📅 วันที่เริ่มต้น</span>
+                </label>
+                <input type="date" name="date_from" class="input input-bordered" value="{{ date_from }}">
+              </div>
+
+              {# วันที่สิ้นสุด #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">📅 วันที่สิ้นสุด</span>
+                </label>
+                <input type="date" name="date_to" class="input input-bordered" value="{{ date_to }}">
+              </div>
+
+              {# ซัพพลายเออร์ #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">🏢 ซัพพลายเออร์</span>
+                </label>
+                <select name="supplier" class="select select-bordered">
+                  <option value="">— ทั้งหมด —</option>
+                  {% for sup in suppliers %}
+                    <option value="{{ sup.id }}" {% if supplier_id == sup.id|stringformat:"s" %}selected{% endif %}>
+                      {{ sup.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              {# สถานะ #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">📌 สถานะ</span>
+                </label>
+                <select name="status" class="select select-bordered">
+                  <option value="">— ทั้งหมด —</option>
+                  <option value="DRAFT" {% if status == 'DRAFT' %}selected{% endif %}>📝 Draft</option>
+                  <option value="POSTED" {% if status == 'POSTED' %}selected{% endif %}>✅ Posted</option>
+                  <option value="CANCELLED" {% if status == 'CANCELLED' %}selected{% endif %}>❌ Cancelled</option>
+                </select>
+              </div>
+            </div>
+
+            {# ปุ่ม #}
+            <div class="flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                ค้นหา
+              </button>
+              <a href="?" class="btn btn-ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                รีเซ็ต
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {# ========== ตารางรายการ ========== #}
+      <div class="card bg-white shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">📋 รายการเอกสารรับเข้า</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra table-sm">
+              <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>เลขที่เอกสาร</th>
+                  <th>วันที่</th>
+                  <th>ซัพพลายเออร์</th>
+                  <th class="text-center">รายการ</th>
+                  <th class="text-right">มูลค่า</th>
+                  <th class="text-center">สถานะ</th>
+                  <th>ผู้บันทึก</th>
+                  <th class="text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for purchase in page_obj %}
+                <tr {% if last_purchase_id == purchase.id %}class="bg-yellow-50"{% endif %}>
+                  <td class="text-center">{{ forloop.counter }}</td>
+                  <td>
+                    <span class="font-mono font-bold text-sm">{{ purchase.doc_no }}</span>
+                    {% if last_purchase_id == purchase.id %}
+                      <span class="badge badge-warning badge-xs ml-2">ใหม่!</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ purchase.purchase_date|date:"d/m/Y H:i" }}</td>
+                  <td>
+                    <span class="badge badge-primary badge-sm">{{ purchase.supplier.name }}</span>
+                  </td>
+                  <td class="text-center">
+                    <span class="badge badge-info">{{ purchase.items.count }} รายการ</span>
+                  </td>
+                  <td class="text-right">
+                    <span class="font-semibold">{{ purchase.grand_total|default:0|floatformat:2|intcomma }}</span>
+                  </td>
+                  <td class="text-center">
+                    {% if purchase.status == 'DRAFT' %}
+                      <span class="badge badge-ghost">📝 Draft</span>
+                    {% elif purchase.status == 'POSTED' %}
+                      <span class="badge badge-success">✅ Posted</span>
+                    {% elif purchase.status == 'CANCELLED' %}
+                      <span class="badge badge-error">❌ Cancelled</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ purchase.created_by.username }}</td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      {# ✨ ปุ่มดูบิล (แบบที่ 2: 🔍 ดูบิล) #}
+                      <a href="{% url 'purchase_detail' purchase.id %}" 
+                         class="btn btn-warning btn-sm gap-1 shadow hover:shadow-lg transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <span class="font-semibold">ดูบิล</span>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="9" class="text-center py-8">
+                    <div class="text-4xl mb-2">📦</div>
+                    <div class="text-gray-500">ไม่พบเอกสารรับเข้า</div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {# Pagination #}
+          {% if page_obj.has_other_pages %}
+          <div class="flex justify-center mt-6">
+            <div class="join">
+              {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&search={{ search }}&supplier={{ supplier_id }}&status={{ status }}&date_from={{ date_from }}&date_to={{ date_to }}" 
+                   class="join-item btn">«</a>
+              {% endif %}
+              
+              <button class="join-item btn">หน้า {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</button>
+              
+              {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&search={{ search }}&supplier={{ supplier_id }}&status={{ status }}&date_from={{ date_from }}&date_to={{ date_to }}" 
+                   class="join-item btn">»</a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

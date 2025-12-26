@@ -1,0 +1,269 @@
+{% load tailwind_tags %}
+{% load humanize %}
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>รายงานการนำเข้าสินค้า</title>
+  {% tailwind_css %}
+</head>
+<body class="bg-base-200">
+<div class="flex min-h-screen">
+
+  {# ========== Sidebar ========== #}
+  {% include "partials/sidebar.html" %}
+
+  {# ========== Main Content ========== #}
+  <main class="flex-1 p-8 overflow-y-auto">
+    <div class="max-w-7xl mx-auto">
+      
+      {# Header #}
+      <div class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">📊 รายงานการนำเข้าสินค้า</h1>
+        <p class="text-gray-600">ดูสรุปและรายละเอียดการนำเข้าสินค้าทั้งหมด</p>
+      </div>
+
+      {# Messages #}
+      {% if messages %}
+        <div class="mb-6 space-y-2">
+          {% for m in messages %}
+            <div class="alert alert-{{ m.tags }} shadow-lg">
+              <span>{{ m|safe }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {# ========== ฟิลเตอร์ ========== #}
+      <div class="card bg-white shadow-xl mb-6">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">🔍 ค้นหาและกรอง</h2>
+          
+          <form method="get" class="space-y-4">
+            <div class="grid md:grid-cols-4 gap-4">
+              {# วันที่เริ่มต้น #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">📅 วันที่เริ่มต้น</span>
+                </label>
+                <input type="date" name="start_date" class="input input-bordered" 
+                       value="{{ start_date|date:'Y-m-d' }}">
+              </div>
+
+              {# วันที่สิ้นสุด #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">📅 วันที่สิ้นสุด</span>
+                </label>
+                <input type="date" name="end_date" class="input input-bordered" 
+                       value="{{ end_date|date:'Y-m-d' }}">
+              </div>
+
+              {# ผู้นำเข้า #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">👤 ผู้นำเข้า</span>
+                </label>
+                <input type="text" name="created_by" class="input input-bordered" 
+                       placeholder="ชื่อผู้นำเข้า" value="{{ created_by }}">
+              </div>
+
+              {# ค้นหาสินค้า #}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-semibold">🔍 ค้นหาสินค้า</span>
+                </label>
+                <input type="text" name="search" class="input input-bordered" 
+                       placeholder="SKU หรือ ชื่อสินค้า" value="{{ search }}">
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+              <button type="submit" class="btn btn-primary gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                ค้นหา
+              </button>
+              <a href="?" class="btn btn-ghost gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                รีเซ็ต
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {# ========== สรุปภาพรวม ========== #}
+      <div class="grid md:grid-cols-3 gap-6 mb-8">
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-figure text-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <div class="stat-title">รายการนำเข้า</div>
+            <div class="stat-value text-primary">{{ total_items|floatformat:0 }}</div>
+            <div class="stat-desc">รายการ</div>
+          </div>
+        </div>
+
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-figure text-secondary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            <div class="stat-title">จำนวนรวม</div>
+            <div class="stat-value text-secondary">{{ total_quantity|floatformat:0 }}</div>
+            <div class="stat-desc">ชิ้น</div>
+          </div>
+        </div>
+
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-figure text-success">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="stat-title">มูลค่ารวม</div>
+            <div class="stat-value text-success">{{ total_value|default:0|floatformat:2|intcomma }} </div>
+            <div class="stat-desc">บาท</div>
+          </div>
+        </div>
+      </div>
+
+      {# ========== สรุปตามผู้นำเข้า ========== #}
+      {% if importers %}
+      <div class="card bg-white shadow-xl mb-6">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">👥 สรุปตามผู้นำเข้า</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead class="bg-primary text-white">
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>👤 ผู้นำเข้า</th>
+                  <th class="text-right">📋 รายการ</th>
+                  <th class="text-right">📦 จำนวน (ชิ้น)</th>
+                  <th class="text-right">💰 มูลค่า (บาท)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for imp in importers %}
+                <tr>
+                  <td class="text-center font-bold">{{ forloop.counter }}</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="avatar placeholder">
+                        <div class="bg-neutral text-neutral-content rounded-full w-10">
+                          <span class="text-sm">{{ imp.name.0|upper }}</span>
+                        </div>
+                      </div>
+                      <span class="font-semibold">{{ imp.name }}</span>
+                    </div>
+                  </td>
+                  <td class="text-right">
+                    <span class="badge badge-primary">{{ imp.items }}</span>
+                  </td>
+                  <td class="text-right font-semibold">{{ imp.quantity|floatformat:0 }}</td>
+                  <td class="text-right text-success font-bold">{{ imp.value|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# ========== รายการนำเข้าล่าสุด ========== #}
+      <div class="card bg-white shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">📋 รายการนำเข้าล่าสุด</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra table-sm">
+              <thead class="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>📅 วันที่</th>
+                  <th>SKU</th>
+                  <th>ชื่อสินค้า</th>
+                  <th>หมวดหมู่</th>
+                  <th class="text-right">จำนวน</th>
+                  <th class="text-right">ราคาทุน</th>
+                  <th class="text-right">มูลค่า</th>
+                  <th>อ้างอิง</th>
+                  <th>ผู้นำเข้า</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for m in movements %}
+                <tr>
+                  <td class="text-center">{{ forloop.counter }}</td>
+                  <td>
+                    <div class="text-xs">
+                      <div>{{ m.created_at|date:"d/m/Y" }}</div>
+                      <div class="text-gray-500">{{ m.created_at|date:"H:i" }} น.</div>
+                    </div>
+                  </td>
+                  <td><span class="font-mono font-bold text-xs">{{ m.product.sku }}</span></td>
+                  <td>{{ m.product.name }}</td>
+                  <td><span class="badge badge-primary badge-sm">{{ m.product.category.name }}</span></td>
+                  <td class="text-right">
+                    <span class="badge badge-success">{{ m.quantity|floatformat:0 }}</span>
+                  </td>
+                  <td class="text-right">{{ m.product.cost_price|floatformat:2 }}</td>
+                  <td class="text-right font-bold">
+                    {% widthratio m.quantity 1 m.product.cost_price as value %}
+                    {{ value|floatformat:2 }}
+                  </td>
+                  <td>
+                    <span class="badge badge-outline badge-sm">{{ m.reference }}</span>
+                  </td>
+                  <td>
+                    <div class="text-xs">
+                      {% if 'โดย' in m.note %}
+                        {{ m.note|cut:"นำเข้าครั้งแรก"|cut:"นำเข้าเพิ่ม"|cut:"ชิ้น"|cut:"("|cut:")"|cut:"โดย"|truncatewords:3 }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="10" class="text-center py-8">
+                    <div class="text-4xl mb-2">📭</div>
+                    <div class="text-gray-500">ไม่พบรายการนำเข้า</div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if total_items > 100 %}
+          <div class="alert alert-info mt-4">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>แสดง 100 รายการล่าสุดจากทั้งหมด {{ total_items }} รายการ</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

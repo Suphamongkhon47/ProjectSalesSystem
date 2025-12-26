@@ -1,0 +1,111 @@
+{% load tailwind_tags %}
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>🔐 เข้าสู่ระบบ - POS</title>
+  {% tailwind_css %}
+</head>
+<body class="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 min-h-screen flex items-center justify-center">
+
+  <div class="container mx-auto px-4">
+    <div class="max-w-md mx-auto">
+      
+      {# Card #}
+      <div class="card bg-white shadow-2xl">
+        <div class="card-body p-8">
+          
+          {# Logo/Header #}
+          <div class="text-center mb-8">
+            <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.8 4M7 13h9.4a1 1 0 0 0 .98-.804l1.2-6A1 1 0 0 0 17.6 5H5.8M7 13L5.8 7M7 13l-1.6 7.2M9 21h6M9 21a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
+              </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">ระบบขายอะไหล่</h1>
+            <p class="text-gray-500">กรุณาเข้าสู่ระบบเพื่อใช้งาน</p>
+          </div>
+
+          {# Messages #}
+          {% if messages %}
+            <div class="mb-6 space-y-2">
+              {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} shadow-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {# Login Form #}
+          <form method="post" action="{% url 'login' %}">
+            {% csrf_token %}
+            
+            {# Username #}
+            <div class="form-control mb-4">
+              <label class="label">
+                <span class="label-text font-semibold">👤 ชื่อผู้ใช้</span>
+              </label>
+              <input type="text" 
+                     name="username" 
+                     class="input input-bordered input-lg w-full" 
+                     placeholder="กรอกชื่อผู้ใช้"
+                     required
+                     autofocus>
+            </div>
+
+            {# Password #}
+            <div class="form-control mb-6">
+              <label class="label">
+                <span class="label-text font-semibold">🔒 รหัสผ่าน</span>
+              </label>
+              <input type="password" 
+                     name="password" 
+                     class="input input-bordered input-lg w-full" 
+                     placeholder="กรอกรหัสผ่าน"
+                     required>
+            </div>
+
+            {# Submit Button #}
+            <button type="submit" class="btn btn-primary btn-lg w-full gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+              เข้าสู่ระบบ
+            </button>
+          </form>
+
+          {# Footer #}
+          <div class="text-center mt-6 text-sm text-gray-500">
+            <p>ระบบจัดการขาย POS</p>
+            <p class="mt-1">© 2025 All rights reserved</p>
+          </div>
+
+        </div>
+      </div>
+
+      {# Info Card #}
+      <div class="card bg-white/90 shadow-xl mt-4">
+        <div class="card-body p-4">
+          <div class="text-sm text-gray-600">
+            <p class="font-semibold mb-2">💡 ข้อมูลสำหรับทดสอบ:</p>
+            <p>• Username: <span class="font-mono bg-gray-100 px-2 py-1 rounded">admin</span></p>
+            <p>• Password: <span class="font-mono bg-gray-100 px-2 py-1 rounded">admin123</span></p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Auto focus username input
+    document.querySelector('input[name="username"]').focus();
+  </script>
+
+</body>
+</html>

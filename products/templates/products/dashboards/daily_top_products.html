@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 สินค้าขายดี</title>
+    {% load tailwind_tags %}
+    {% tailwind_css %}
+</head>
+<body class="bg-base-200">
+<div class="flex min-h-screen">
+    
+    {# Sidebar #}
+    {% include "partials/sidebar.html" %}
+    
+    {# Main Content #}
+    <main class="flex-1 p-6">
+        
+        {# Header #}
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold">🔥 รายงานสินค้าขายดี</h1>
+                <p class="text-gray-600">วันที่: {{ report_date|date:"j F Y" }}</p>
+            </div>
+            
+            {# เลือกวันที่ #}
+            <div class="flex gap-2">
+                <input type="date" 
+                       id="date-picker" 
+                       class="input input-bordered" 
+                       value="{{ report_date|date:'Y-m-d' }}"
+                       max="{{ today|date:'Y-m-d' }}"
+                       onchange="window.location.href='?date='+this.value">
+                <a href="{% url 'home_dashboard' %}" class="btn btn-ghost">
+                    ← กลับ Dashboard
+                </a>
+            </div>
+        </div>
+        
+        {# สรุปภาพรวม #}
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="stat bg-white rounded-lg shadow">
+                <div class="stat-title">จำนวนบิล</div>
+                <div class="stat-value text-primary">{{ bill_count }}</div>
+            </div>
+            <div class="stat bg-white rounded-lg shadow">
+                <div class="stat-title">สินค้าที่ขาย</div>
+                <div class="stat-value text-secondary">{{ summary.total_items }}</div>
+            </div>
+            <div class="stat bg-white rounded-lg shadow">
+                <div class="stat-title">ยอดขาย</div>
+                <div class="stat-value text-success">{{ summary.total_sales|floatformat:0 }}</div>
+            </div>
+            <div class="stat bg-white rounded-lg shadow">
+                <div class="stat-title">กำไร</div>
+                <div class="stat-value text-success">{{ summary.total_profit|floatformat:0 }}</div>
+            </div>
+            <div class="stat bg-white rounded-lg shadow">
+                <div class="stat-title">Margin</div>
+                <div class="stat-value text-info">{{ summary.profit_margin|floatformat:1 }}%</div>
+            </div>
+        </div>
+        
+        {# ตารางสินค้าขายดี #}
+        <div class="card bg-white shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">📦 รายการสินค้า (TOP 20)</h2>
+                
+                <div class="overflow-x-auto mt-4">
+                    <table class="table table-zebra">
+                        <thead>
+                            <tr>
+                                <th class="w-16">อันดับ</th>
+                                <th>SKU</th>
+                                <th>สินค้า</th>
+                                <th>หมวดหมู่</th>
+                                <th class="text-center">จำนวนขาย</th>
+                                <th class="text-right">ยอดขาย</th>
+                                <th class="text-right">กำไร</th>
+                                <th class="text-center">Margin</th>
+                                <th class="text-center">จำนวนบิล</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in top_products %}
+                            <tr>
+                                <td>
+                                    <div class="badge badge-lg
+                                        {% if forloop.counter == 1 %}badge-warning
+                                        {% elif forloop.counter == 2 %}badge-info
+                                        {% elif forloop.counter == 3 %}badge-success
+                                        {% else %}badge-ghost{% endif %}">
+                                        {{ forloop.counter }}
+                                    </div>
+                                </td>
+                                <td class="font-mono text-xs">{{ product.product__sku }}</td>
+                                <td>
+                                    <div class="font-bold">{{ product.product__name }}</div>
+                                    <div class="text-xs text-gray-600">{{ product.product__unit }}</div>
+                                </td>
+                                <td>
+                                    <div class="badge badge-outline">{{ product.product__category__name|default:"-" }}</div>
+                                </td>
+                                <td class="text-center font-bold">{{ product.total_quantity|floatformat:0 }}</td>
+                                <td class="text-right font-bold text-success">{{ product.total_amount|floatformat:0 }} ฿</td>
+                                <td class="text-right font-bold text-info">{{ product.total_profit|floatformat:0 }} ฿</td>
+                                <td class="text-center">
+                                    <div class="badge
+                                        {% if product.profit_margin >= 30 %}badge-success
+                                        {% elif product.profit_margin >= 20 %}badge-warning
+                                        {% else %}badge-error{% endif %}">
+                                        {{ product.profit_margin|floatformat:1 }}%
+                                    </div>
+                                </td>
+                                <td class="text-center">{{ product.bill_count }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="9" class="text-center py-8 text-gray-500">
+                                    ไม่มีข้อมูลการขาย
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card-actions justify-end mt-4">
+                    <button onclick="window.print()" class="btn btn-outline">
+                        🖨️ พิมพ์รายงาน
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+    </main>
+    
+</div>
+</body>
+</html>

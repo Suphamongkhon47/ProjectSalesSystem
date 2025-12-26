@@ -1,0 +1,461 @@
+{% load tailwind_tags extras %}
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>เพิ่มสินค้าเป็นล็อต</title>
+  {% tailwind_css %}
+  <style>
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+  </style>
+</head>
+<body class="bg-base-200">
+<div class="flex min-h-screen">
+
+  {# ========== Sidebar ========== #}
+  <aside class="w-72 flex-shrink-0 text-white bg-gradient-to-b from-blue-700 via-blue-600 to-blue-700 shadow-xl">
+    <div class="px-6 py-6 border-b border-white/15">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="avatar placeholder">
+          <div class="bg-white text-blue-700 rounded-full w-12">
+            <span class="text-xl">{{ request.user.username.0|upper|default:"A" }}</span>
+          </div>
+        </div>
+        <div>
+          <div class="text-base font-bold">{{ request.user.username|default:"ADMIN" }}</div>
+          <div class="text-xs opacity-90">ผู้ประกอบการ</div>
+        </div>
+      </div>
+    </div>
+    <nav class="py-2 text-base leading-tight">
+      {% url 'pos_index' as pos_url %}
+      <a href="{{ pos_url|default:'#' }}"
+         class="flex items-center gap-4 px-6 py-4 border-b border-white/10 hover:bg-white/15 transition-all duration-200">
+        <span class="w-7 text-2xl">🛒</span>
+        <span class="font-medium">ขายสินค้า</span>
+      </a>
+
+      {% url 'product_bulk_add' as bulk_url %}
+      <a href="{{ bulk_url|default:'#' }}"
+         class="flex items-center gap-4 px-6 py-4 border-b border-white/10 bg-white/10">
+        <span class="w-7 text-2xl">📦</span>
+        <span class="font-medium">เพิ่มสินค้า</span>
+      </a>
+
+      <a href="#"
+         class="flex items-center gap-4 px-6 py-4 border-b border-white/10 hover:bg-white/15 transition-all duration-200">
+        <span class="w-7 text-2xl">📚</span>
+        <span class="font-medium">ตั้งค่าสินค้า</span>
+      </a>
+
+      <a href="#"
+         class="flex items-center gap-4 px-6 py-4 hover:bg-white/15 transition-all duration-200">
+        <span class="w-7 text-2xl">📊</span>
+        <span class="font-medium">รายงาน</span>
+      </a>
+    </nav>
+  </aside>
+
+  {# ========== Main Content ========== #}
+  <main class="flex-1 p-8 overflow-y-auto">
+    <div class="max-w-[1800px] mx-auto">
+      
+      {# Header #}
+      <div class="mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">📦 เพิ่มสินค้าใหม่</h1>
+            <p class="text-gray-600">กรอกข้อมูลสินค้า เพิ่มลงตาราง แล้วบันทึกพร้อมกัน</p>
+          </div>
+          <div class="stats shadow">
+            <div class="stat">
+              <div class="stat-title">รายการในตาราง</div>
+              <div class="stat-value text-primary">{{ total_rows }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Alert Messages #}
+      {% if messages %}
+        <div class="mb-6 space-y-2">
+          {% for m in messages %}
+            <div class="alert {% if m.tags == 'success' %}alert-success{% elif m.tags == 'error' %}alert-error{% else %}alert-info{% endif %} shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                {% if m.tags == 'success' %}
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                {% else %}
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                {% endif %}
+              </svg>
+              <span>{{ m }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="grid xl:grid-cols-12 gap-6">
+
+        {# ========== Form Panel ========== #}
+        <div class="xl:col-span-5 space-y-6">
+          <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+              <h2 class="card-title text-xl mb-4 flex items-center gap-2">
+                <span class="text-2xl">✏️</span>
+                กรอกข้อมูลสินค้า
+              </h2>
+
+              <form method="post" id="addRowForm" class="space-y-5">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_row">
+
+                {# Row 1: Category & SKU #}
+                <div class="grid md:grid-cols-2 gap-4">
+                  <div class="form-control">
+                    <label class="label">
+                      <span class="label-text font-semibold text-base">หมวดหมู่ <span class="text-error">*</span></span>
+                    </label>
+                    <select name="category" class="select select-bordered select-lg" required>
+                      <option value="">— เลือกหมวดหมู่ —</option>
+                      {% for c in categories %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="form-control">
+                    <label class="label">
+                      <span class="label-text font-semibold text-base">รหัสสินค้า (SKU) <span class="text-error">*</span></span>
+                    </label>
+                    <input name="sku" class="input input-bordered input-lg" required placeholder="เช่น BRK-001">
+                  </div>
+                </div>
+
+                {# Row 2: Product Name #}
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-semibold text-base">ชื่อสินค้า <span class="text-error">*</span></span>
+                  </label>
+                  <input name="name" class="input input-bordered input-lg" required placeholder="เช่น ผ้าเบรกหน้า Toyota Vios">
+                </div>
+
+                {# Row 3: Unit & Pieces Per Unit #}
+                <div class="grid md:grid-cols-2 gap-4">
+                  <div class="form-control">
+                    <label class="label">
+                      <span class="label-text font-semibold text-base">หน่วย</span>
+                    </label>
+                    <select name="unit" class="select select-bordered select-lg">
+                      <option value="ชิ้น">ชิ้น</option>
+                      <option value="กล่อง">กล่อง</option>
+                      <option value="ชุด">ชุด</option>
+                      <option value="คู่">คู่</option>
+                      <option value="แผ่น">แผ่น</option>
+                    </select>
+                  </div>
+
+                  <div class="form-control">
+                    <label class="label">
+                      <span class="label-text font-semibold text-base">จำนวนชิ้น/หน่วย <span class="text-error">*</span></span>
+                    </label>
+                    <input type="number" name="pieces_per_unit" class="input input-bordered input-lg" 
+                           value="1" step="0.01" min="0.01" required>
+                    <label class="label">
+                      <span class="label-text-alt text-info">💡 1 หน่วย = ? ชิ้น</span>
+                    </label>
+                  </div>
+                </div>
+
+                {# Row 4: Supplier #}
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-semibold text-base">ซัพพลายเออร์</span>
+                  </label>
+                  <select name="supplier" class="select select-bordered select-lg">
+                    <option value="">— เลือกซัพพลายเออร์ —</option>
+                    {% for s in suppliers %}
+                      <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                {# Row 5: Description #}
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-semibold text-base">รายละเอียด</span>
+                  </label>
+                  <textarea name="description" class="textarea textarea-bordered textarea-lg" rows="2"
+                            placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)"></textarea>
+                </div>
+
+                <div class="divider my-6"></div>
+
+                {# Pricing Section #}
+                <div class="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg space-y-4">
+                  <h3 class="font-bold text-lg flex items-center gap-2">
+                    <span>💰</span> ราคาทุนและราคาขาย
+                  </h3>
+
+                  <div class="grid md:grid-cols-3 gap-4">
+                    <div class="form-control">
+                      <label class="label">
+                        <span class="label-text font-semibold">ราคาทุน <span class="text-error">*</span></span>
+                      </label>
+                      <input type="number" step="0.01" min="0" name="cost_price"
+                             class="input input-bordered input-lg font-bold" required placeholder="0.00">
+                    </div>
+
+                    <div class="form-control">
+                      <label class="label">
+                        <span class="label-text font-semibold">{% if t1 %}{{ t1.name }}{% else %}ราคา T1{% endif %}</span>
+                      </label>
+                      <input type="number" step="0.01" min="0" name="price_t1"
+                             class="input input-bordered input-lg" placeholder="0.00">
+                    </div>
+
+                    <div class="form-control">
+                      <label class="label">
+                        <span class="label-text font-semibold">{% if t2 %}{{ t2.name }}{% else %}ราคา T2{% endif %}</span>
+                      </label>
+                      <input type="number" step="0.01" min="0" name="price_t2"
+                             class="input input-bordered input-lg" placeholder="0.00">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="divider my-6"></div>
+
+ 
+                <div class="divider my-6"></div>
+
+                {# Compatible Models Section #}
+                <div class="space-y-3">
+                  <h3 class="font-bold text-lg flex items-center gap-2">
+                    <span>🚗</span> รุ่นรถที่รองรับ (ถ้ามี)
+                  </h3>
+                  
+                  <div class="grid md:grid-cols-3 gap-2">
+                    <select id="brandSel" class="select select-bordered select-lg">
+                      <option value="">— เลือกยี่ห้อ —</option>
+                      {% for b in brands %}
+                        <option value="{{ b.id }}">{{ b.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <select id="modelSel" class="select select-bordered select-lg" disabled>
+                      <option value="">— เลือกรุ่น —</option>
+                      {% for m in car_models %}
+                        <option data-brand="{{ m.brand_id }}" value="{{ m.name }}">{{ m.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="button" id="addCompat" class="btn btn-primary btn-lg">
+                      <span class="text-lg">➕</span> เพิ่ม
+                    </button>
+                  </div>
+                  
+                  <input type="hidden" name="compatible_models_json" id="compatJson" value="[]">
+                  <div id="compatList" class="flex flex-wrap gap-2 min-h-[40px] p-2 bg-base-200 rounded-lg"></div>
+                </div>
+
+                <div class="divider my-6"></div>
+
+                {# Submit Button #}
+                <button type="submit" class="btn btn-primary btn-lg btn-block">
+                  <span class="text-xl">➕</span>
+                  เพิ่มลงตาราง
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        {# ========== Table Panel ========== #}
+        <div class="xl:col-span-7 space-y-6">
+          <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="card-title text-xl flex items-center gap-2">
+                  <span class="text-2xl">📋</span>
+                  ตารางรายการ (ยังไม่บันทึก)
+                </h2>
+                <div class="badge badge-lg badge-info gap-2">
+                  <span class="text-lg">📦</span>
+                  {{ total_rows }} รายการ
+                </div>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="table table-zebra table-lg">
+                  <thead class="bg-gradient-to-r from-violet-500 to-purple-500 text-white">
+                    <tr>
+                      <th class="text-center">#</th>
+                      <th>หมวดหมู่</th>
+                      <th>SKU</th>
+                      <th>ชื่อสินค้า</th>
+                      <th class="text-center">หน่วน</th>
+                      <th class="text-center">ชิ้น/หน่วย</th>
+                      <th>Supplier</th>
+                      <th class="text-right">ราคาทุน</th>
+                      <th class="text-right">{% if t1 %}{{ t1.code }}{% else %}T1{% endif %}</th>
+                      <th class="text-right">{% if t2 %}{{ t2.code }}{% else %}T2{% endif %}</th>
+                      <th class="text-center">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for r in stage %}
+                    <tr>
+                      <td class="text-center font-bold">{{ forloop.counter }}</td>
+                      <td><span class="badge badge-primary">{{ cat_map|get_item:r.category_id }}</span></td>
+                      <td><span class="font-mono font-bold">{{ r.sku }}</span></td>
+                      <td>{{ r.name }}</td>
+                      <td class="text-center">{{ r.unit }}</td>
+                      <td class="text-center">
+                        <span class="badge badge-info">{{ r.pieces_per_unit|default:"1" }}</span>
+                      </td>
+                      <td>{% if r.supplier_id %}{{ sup_map|get_item:r.supplier_id }}{% else %}-{% endif %}</td>
+                      <td class="text-right font-bold">{{ r.cost_price }}</td>
+                      <td class="text-right">{{ r.price_t1|default:"-" }}</td>
+                      <td class="text-right">{{ r.price_t2|default:"-" }}</td>
+                      <td class="text-center">
+                        <form method="post" style="display:inline;">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="remove_row">
+                          <input type="hidden" name="index" value="{{ forloop.counter0 }}">
+                          <button type="submit" class="btn btn-ghost btn-sm text-error">
+                            <span class="text-lg">🗑️</span>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                      <td colspan="11" class="text-center opacity-70 py-8">
+                        <div class="text-4xl mb-2">📦</div>
+                        <div>ยังไม่มีรายการในตาราง</div>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="divider"></div>
+              
+              <div class="stats stats-vertical md:stats-horizontal shadow w-full">
+                <div class="stat">
+                  <div class="stat-figure text-primary">
+                    <span class="text-4xl">📦</span>
+                  </div>
+                  <div class="stat-title">จำนวนรายการ</div>
+                  <div class="stat-value text-primary">{{ total_rows }}</div>
+                </div>
+                
+                <div class="stat">
+                  <div class="stat-figure text-secondary">
+                    <span class="text-4xl">💰</span>
+                  </div>
+                  <div class="stat-title">รวมราคาทุน</div>
+                  <div class="stat-value text-secondary">{{ total_cost|floatformat:2 }}</div>
+                  <div class="stat-desc">บาท</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# Action Buttons #}
+          <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+              <div class="flex flex-col md:flex-row gap-4 justify-end">
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="clear_rows">
+                  <button type="submit" class="btn btn-outline btn-lg">
+                    <span class="text-xl">🗑️</span>
+                    ล้างตาราง
+                  </button>
+                </form>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="commit">
+                  <button type="submit" class="btn btn-success btn-lg" {% if not stage %}disabled{% endif %}>
+                    <span class="text-xl">💾</span>
+                    บันทึกทั้งหมดลงฐานข้อมูล
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Compatible Models Management
+  const brandSel = document.getElementById('brandSel');
+  const modelSel = document.getElementById('modelSel');
+  const addBtn = document.getElementById('addCompat');
+  const compatList = [];
+  const compatJson = document.getElementById('compatJson');
+  const compatWrap = document.getElementById('compatList');
+
+  function filterModelsByBrand(id) {
+    modelSel.querySelectorAll('option').forEach(o => {
+      if (!o.value) return;
+      o.hidden = (o.dataset.brand !== String(id));
+    });
+  }
+
+  brandSel?.addEventListener('change', () => {
+    const id = brandSel.value;
+    modelSel.disabled = !id;
+    modelSel.value = '';
+    filterModelsByBrand(id);
+  });
+
+  function renderCompat() {
+    compatJson.value = JSON.stringify(compatList);
+    compatWrap.innerHTML = '';
+    
+    if (compatList.length === 0) {
+      compatWrap.innerHTML = '<div class="text-sm opacity-50 p-2">ยังไม่มีรุ่นรถที่เลือก</div>';
+      return;
+    }
+    
+    compatList.forEach((c, i) => {
+      const el = document.createElement('div');
+      el.className = 'badge badge-lg badge-primary gap-2';
+      el.innerHTML = `
+        <span>🚗 ${c.brandName} ${c.model}</span>
+        <button type="button" class="btn btn-ghost btn-xs" onclick="removeCompat(${i})">✕</button>
+      `;
+      compatWrap.appendChild(el);
+    });
+  }
+
+  window.removeCompat = function(index) {
+    compatList.splice(index, 1);
+    renderCompat();
+  };
+
+  addBtn?.addEventListener('click', () => {
+    const bid = brandSel.value;
+    const bname = brandSel.options[brandSel.selectedIndex]?.text || '';
+    const mname = modelSel.value;
+    if (!bid || !mname) return;
+    if (!compatList.find(x => String(x.brand) === String(bid) && x.model === mname)) {
+      compatList.push({ brand: bid, brandName: bname, model: mname });
+      renderCompat();
+    }
+    modelSel.value = '';
+  });
+
+  renderCompat();
+</script>
+</body>
+</html>
