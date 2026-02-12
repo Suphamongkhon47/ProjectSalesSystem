@@ -29,7 +29,8 @@ class Purchase(models.Model):
     
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = "purchases"
         ordering = ['-purchase_date']
@@ -63,6 +64,7 @@ class PurchaseItem(models.Model):
     
     quantity = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวน")
     unit_cost = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="ทุนต่อหน่วย (บาท)")
+    actual_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0,verbose_name="เพิ่มสต็อก (ชิ้น)")
     
     # คำนวณยอดรวมบรรทัด (optional เก็บไว้ช่วยดูง่าย)
     line_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -77,7 +79,5 @@ class PurchaseItem(models.Model):
     def __str__(self):
         return f"{self.purchase.doc_no} - {self.product.name} ({self.quantity} {self.product.unit})"
     
-    @property
-    def total_cost(self):
-        """ต้นทุนรวมของรายการนี้"""
-        return self.line_total
+    
+    

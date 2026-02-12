@@ -80,13 +80,20 @@
             font-size: 32px;
             font-weight: bold;
             color: #1f2937;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
+        }
+        
+        .store-contact, .store-address {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 4px 0;
         }
 
         .receipt-title {
             font-size: 20px;
             color: #6b7280;
             font-weight: 500;
+            margin-top: 8px;
         }
 
         /* ข้อมูลบิล */
@@ -294,7 +301,13 @@
         
         <!-- Header -->
         <div class="receipt-header">
-            <div class="store-name">🏪 ร้านขายอะไหล่ยนต์</div>
+            <div class="store-name">🏪 {{ settings.store_name|default:"ร้านขายอะไหล่ยนต์" }}</div>
+            {% if settings.store_phone %}
+            <div class="store-contact">📞 {{ settings.store_phone }}</div>
+            {% endif %}
+            {% if settings.store_address %}
+            <div class="store-address">📍 {{ settings.store_address }}</div>
+            {% endif %}
             <div class="receipt-title">ใบเสร็จรับเงิน</div>
         </div>
 
@@ -306,7 +319,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">วันที่:</span>
-                <span class="info-value">{{ sale.sale_date|date:"d/m/Y H:i" }} น.</span>
+                <span class="info-value">{{ sale.transaction_date|date:"d/m/Y H:i" }} น.</span>
             </div>
             <div class="info-row">
                 <span class="info-label">พนักงานขาย:</span>
@@ -333,15 +346,29 @@
             {% for item in items %}
             <div class="item">
                 <div class="item-header">
-                    <div style="display: flex; flex: 1;">
+                    <div style="display: flex; flex: 1; align-items: baseline;">
                         <span class="item-number">{{ forloop.counter }}.</span>
-                        <span class="item-name">{{ item.product.name }}</span>
+                        
+                        <span class="item-name">
+                            {% if item.unit_type == 'คู่' or item.unit_type == 'ชุด' %}
+                                {{ item.product.base_name|default:item.product.name }}
+                            {% else %}
+                                {{ item.product.name }}
+                            {% endif %}
+
+                            {% if item.unit_type == 'คู่' %}
+                                <span style="background: #3b82f6; color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; vertical-align: middle;">คู่</span>
+                            {% elif item.unit_type == 'ชุด' %}
+                                <span style="background: #8b5cf6; color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; vertical-align: middle;">ชุด</span>
+                            {% endif %}
+                        </span>
                     </div>
                     <span class="item-total">{{ item.line_total|floatformat:2 }} ฿</span>
                 </div>
+                
                 <div class="item-details">
-                    <span class="item-sku">SKU: {{ item.product.sku }}</span>
-                    <span>{{ item.quantity|floatformat:0 }} {{ item.product.unit }} x {{ item.unit_price|floatformat:2 }} ฿</span>
+                    <span class="item-sku">SKU: {{ item.display_sku|default:item.product.sku }}</span>
+                    <span>{{ item.quantity|floatformat:0 }} {{ item.unit_type|default:item.product.unit }} x {{ item.unit_price|floatformat:2 }} ฿</span>
                 </div>
             </div>
             {% endfor %}
@@ -392,7 +419,7 @@
 
         <!-- Footer -->
         <div class="receipt-footer">
-            <div class="thank-you">ขอบคุณที่ใช้บริการ</div>
+            <div class="thank-you">{{ settings.receipt_footer|default:"ขอบคุณที่ใช้บริการ" }}</div>
             <div class="print-time">พิมพ์เมื่อ: {{ print_date|date:"d/m/Y H:i:s" }}</div>
         </div>
 

@@ -22,10 +22,10 @@ class Payment(models.Model):
         ('void', 'ยกเลิก'),
     ]
 
-    sale = models.OneToOneField('Sale', on_delete=models.CASCADE, related_name='payment')
+    transaction = models.OneToOneField('Transaction', on_delete=models.CASCADE, related_name='payment')
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='cash',verbose_name="วิธีชำระเงิน")
     
-    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="ยอดที่ต้องชำระ")
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดที่ต้องชำระ")
     
     # ✅ เพิ่ม: สำหรับเงินสด
     received = models.DecimalField(max_digits=12, decimal_places=2, default=0,verbose_name="เงินที่รับ")
@@ -43,7 +43,7 @@ class Payment(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.sale.doc_no} - {self.get_method_display()}"
+        return f"{self.transaction.doc_no} - {self.get_method_display()}"
 
     def save(self, *args, **kwargs):
         if self.method == 'cash':

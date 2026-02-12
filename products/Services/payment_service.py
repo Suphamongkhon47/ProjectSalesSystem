@@ -8,6 +8,7 @@ import base64
 from io import BytesIO
 from decimal import Decimal
 from django.db import transaction
+from django.conf import settings  # ← เพิ่มบรรทัดนี้
 from products.models import Payment
 
 
@@ -44,7 +45,7 @@ def create_promptpay_payload(identifier, amount=None):
         str: Payload String
     """
     
-# 1. เริ่มต้นโครงสร้าง
+    # 1. เริ่มต้นโครงสร้าง
     payload = "000201" 
     payload += "010212" if amount else "010211" # 12=มียอดเงิน, 11=ไม่มี
     
@@ -111,8 +112,6 @@ def generate_promptpay_qr(phone_number, amount, reference=''):
     """
     
     try:
-        # แปลงเบอร์โทร
-        
         # สร้าง Payload
         payload = create_promptpay_payload(
             identifier=phone_number,
@@ -142,8 +141,6 @@ def generate_promptpay_qr(phone_number, amount, reference=''):
         raise ValueError(f"ไม่สามารถสร้าง QR Code ได้: {str(e)}")
 
 
-
-
 # ===================================
 # 4. Payment Management
 # ===================================
@@ -170,35 +167,38 @@ class PaymentService:
         change_val = received_val - amount if received_val > amount else Decimal('0.00')
         
         if hasattr(sale, 'payment'):
-                    # มี Payment แล้ว → อัปเดต
-                    payment = sale.payment
-                    payment.method = method
-                    payment.amount = amount
-                    payment.received = received_val
-                    # payment.change = change_val  # <--- ถ้ามี field นี้ใน model
-                    payment.note = note
-                    payment.status = 'confirmed'
-                    payment.save()
-                    return payment
+            # มี Payment แล้ว → อัปเดต
+            payment = sale.payment
+            payment.method = method
+            payment.amount = amount
+            payment.received = received_val
+            payment.note = note
+            payment.status = 'confirmed'
+            payment.save()
+            return payment
         
         # สร้างใหม่
         payment = Payment.objects.create(
-            sale=sale,
+            transaction=sale,
             method=method,
             amount=amount,
             received=received_val,
-            # change=change_val, # <--- ถ้ามี field นี้ใน model
+            change=change_val,
             note=note,
             status='confirmed'
         )
         return payment
     
     @staticmethod
-    def generate_qr_image(amount):
-        """สร้างรูป QR Code (Base64)"""
+    def generate_qr_image(amount, reference=''):
+        """
+        สร้างรูป QR Code (Base64)
+        
+        ✅ ดึงเบอร์จาก Settings แทนการ Hardcode
+        """
         try:
-            # 👇 แก้เบอร์พร้อมเพย์ร้านค้าของคุณตรงนี้ (เบอร์ที่ผูกกสิกร)
-            SHOP_PROMPTPAY_ID = "0652577703"  # ⚠️ เปลี่ยนเป็นเบอร์จริงของร้าน
+            # ✅ ดึงเบอร์จาก Settings
+            SHOP_PROMPTPAY_ID = getattr(settings, 'PROMPTPAY_PHONE', '0834755649')
             
             # 1. สร้างรหัส Text
             payload = create_promptpay_payload(SHOP_PROMPTPAY_ID, float(amount))

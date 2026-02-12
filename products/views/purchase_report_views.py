@@ -1,39 +1,47 @@
 """
-Views สำหรับรายงานการนำเข้าสินค้า (Purchase Report)
+products/views/purchase_report_views.py
+รายงานการนำเข้าสินค้า - แสดงข้อมูลเดิม
 """
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum, Count, F
-from datetime import datetime, timedelta
+from django.db.models import Q, Sum, Count
+from django.utils import timezone
+from datetime import datetime, time, timedelta
 from decimal import Decimal
-
+from django.contrib.auth import get_user_model
 from products.models import Purchase, PurchaseItem, Supplier
+User = get_user_model() # ✅ ประกาศ User Model
 
 
 def purchase_report(request):
-    """
-    หน้ารายงานการนำเข้าสินค้า
+    """หน้ารายงานการนำเข้าสินค้า"""
     
-    Features:
-    - แสดงรายการ Purchase ทั้งหมด
-    - กรองตาม: วันที่, ซัพพลายเออร์, สถานะ
-    - แสดงสถิติภาพรวม
-    - Pagination
-    """
+    today = timezone.now().date()
+    first_day = today.replace(day=1)
+
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
     
-    # ===== รับค่าจาก GET =====
-    search = request.GET.get('search', '').strip()
-    supplier_id = request.GET.get('supplier', '')
-    status = request.GET.get('status', '')
-    date_from = request.GET.get('date_from', '')
-    date_to = request.GET.get('date_to', '')
-    
-    # ===== Query Purchase =====
+    if not date_from: date_from = first_day.strftime('%Y-%m-%d')
+    if not date_to: date_to = today.strftime('%Y-%m-%d')
+
     purchases = Purchase.objects.select_related('supplier', 'created_by').prefetch_related('items')
     
-    # กรองตามเงื่อนไข
+    # --- Filter Logic ---
+    try:
+        d_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+        dt_from = timezone.make_aware(datetime.combine(d_from, time.min))
+        purchases = purchases.filter(purchase_date__gte=dt_from)
+    except: pass
+
+    try:
+        d_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+        dt_to = timezone.make_aware(datetime.combine(d_to, time.max))
+        purchases = purchases.filter(purchase_date__lte=dt_to)
+    except: pass
+
+    search = request.GET.get('search', '').strip()
     if search:
         purchases = purchases.filter(
             Q(doc_no__icontains=search) |
@@ -41,103 +49,84 @@ def purchase_report(request):
             Q(remark__icontains=search)
         )
     
-    if supplier_id:
-        purchases = purchases.filter(supplier_id=supplier_id)
+    supplier_id = request.GET.get('supplier', '')
+    if supplier_id: purchases = purchases.filter(supplier_id=supplier_id)
     
-    if status:
-        purchases = purchases.filter(status=status)
+    created_by_id = request.GET.get('created_by', '')
+    if created_by_id: purchases = purchases.filter(created_by_id=created_by_id)
+
+    status = request.GET.get('status', '')
+    if status: purchases = purchases.filter(status=status)
     
-    if date_from:
-        try:
-            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
-            purchases = purchases.filter(purchase_date__gte=date_from_obj)
-        except:
-            pass
-    
-    if date_to:
-        try:
-            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
-            # เพิ่ม 1 วันเพื่อรวมวันสุดท้าย
-            date_to_obj = date_to_obj + timedelta(days=1)
-            purchases = purchases.filter(purchase_date__lt=date_to_obj)
-        except:
-            pass
-    
-    # เรียงลำดับ
     purchases = purchases.order_by('-purchase_date', '-id')
     
-    # ===== คำนวณสถิติ =====
-    stats = purchases.aggregate(
-        total_purchases=Count('id'),
-        total_items=Sum('items__quantity'),
-        total_amount=Sum(F('items__quantity') * F('items__unit_cost'))
-    )
+    # ✅ FIX: แยกคำนวณเพื่อความถูกต้อง 100% (แก้ปัญหาเลขเบิ้ล/นับผิด)
+    # 1. นับจำนวนบิล (Count Purchase)
+    total_purchases = purchases.count()
     
-    # ป้องกัน None
-    if stats['total_amount'] is None:
-        stats['total_amount'] = Decimal('0')
-    if stats['total_items'] is None:
-        stats['total_items'] = Decimal('0')
+    # 2. ยอดเงินรวม (Sum Grand Total) - คำนวณจากหัวบิลโดยตรง
+    total_amount = purchases.aggregate(Sum('grand_total'))['grand_total__sum'] or Decimal('0')
     
-    # ===== Pagination =====
-    paginator = Paginator(purchases, 20)  # 20 รายการต่อหน้า
-    page_number = request.GET.get('page', 1)
-    page_obj = paginator.get_page(page_number)
+    stats = {
+        'total_purchases': total_purchases, # เลขนี้จะโชว์ 1 (ถ้ามี 1 บิล)
+        'total_amount': total_amount
+    }
     
-    # ===== ดึงข้อมูลเพิ่มเติม =====
+    # Pagination
+    paginator = Paginator(purchases, 20)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+    
     suppliers = Supplier.objects.order_by('name')
+    users = User.objects.filter(is_active=True).order_by('username')
     
-    # ✨ ไฮไลท์บิลล่าสุด (ถ้ามี)
     last_purchase_id = request.session.pop('last_purchase_id', None)
     
-    return render(request, 'products/reports/purchase_report.html', {
+    context = {
         'page_obj': page_obj,
         'suppliers': suppliers,
+        'users': users,
         'search': search,
         'supplier_id': supplier_id,
+        'created_by_id': created_by_id,
         'status': status,
         'date_from': date_from,
         'date_to': date_to,
         'stats': stats,
         'last_purchase_id': last_purchase_id,
-    })
-
+    }
+    return render(request, 'products/reports/purchase_report.html', context)
 
 def purchase_detail(request, id):
     """
     หน้ารายละเอียดบิลนำเข้า
-    
-    Features:
-    - แสดงข้อมูลหัวบิล
-    - แสดงตารางรายการสินค้า
-    - คำนวณสต็อกจริง (quantity × pieces_per_unit)
-    - ปุ่มพิมพ์, ยกเลิก
+    แสดงข้อมูลเดิม ไม่เพิ่มเติม
     """
 
-    purchase = get_object_or_404(Purchase.objects.select_related('supplier', 'created_by').prefetch_related('items__product__category'), id=id)
+    purchase = get_object_or_404(
+        Purchase.objects.select_related('supplier', 'created_by').prefetch_related('items__product__category'), 
+        id=id
+    )
 
     # ดึงรายการสินค้า
     items = purchase.items.select_related('product__category').order_by('id')
     
-    # คำนวณยอดรวมและสต็อกจริง
+    # คำนวณยอดรวม
     total_amount = Decimal('0')
     for item in items:
-        item.actual_stock = item.quantity
         total_amount += item.line_total
     
-    return render(request, 'products/reports/purchase_detail.html', {
+    context = {
         'purchase': purchase,
         'items': items,
         'total_amount': total_amount,
-    })
+    }
+    
+    return render(request, 'products/reports/purchase_detail.html', context)
 
 
 def cancel_purchase(request, id):
     """
     ยกเลิกเอกสารรับเข้า (เฉพาะ DRAFT)
-    
-    - เปลี่ยนสถานะเป็น CANCELLED
-    - ไม่สามารถยกเลิกเอกสาร POSTED ได้
     """
     
     if request.method != 'POST':

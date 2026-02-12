@@ -1,364 +1,312 @@
 {% load tailwind_tags %}
 {% load humanize %}
-{% load custom_filters %}
+{% load custom_filters %} 
 <!doctype html>
 <html lang="th" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>รายงานการรับคืนสินค้า</title>
+  <title>↩️ รายงานการรับคืนสินค้า</title>
   {% tailwind_css %}
+  <style>
+    body { font-family: 'Inter', 'Sarabun', sans-serif; background-color: #f3f4f6; }
+    
+    /* Table Styles */
+    .table-clean th { 
+      background-color: #f9fafb; 
+      color: #6b7280; 
+      font-weight: 600; 
+      text-transform: uppercase; 
+      font-size: 0.8rem; 
+      letter-spacing: 0.05em; 
+      border-bottom: 1px solid #e5e7eb; 
+      padding: 1rem;
+    }
+    .table-clean td { 
+      border-bottom: 1px solid #f3f4f6; 
+      padding: 1rem; 
+      font-size: 0.95rem; 
+      vertical-align: middle;
+    }
+    
+    /* Card Hover Effect */
+    .stat-card { transition: all 0.2s; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+  </style>
 </head>
-<body class="bg-base-200">
+<body class="text-gray-800">
 
 <div class="flex min-h-screen">
-
-  {# ========== Sidebar ========== #}
+  
+  {# Sidebar #}
   {% include "partials/sidebar.html" %}
-
-  {# ========== Main Content ========== #}
-  <main class="flex-1 p-8 overflow-y-auto">
-    <div class="max-w-[1800px] mx-auto">
+  
+  {# Main Content #}
+  <main class="flex-1 p-6 lg:p-10 overflow-y-auto">
+    <div class="max-w-[1920px] mx-auto space-y-8">
       
-      {# Header #}
-      <div class="mb-8">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">🔙 รายงานการรับคืนสินค้า</h1>
-            <p class="text-gray-600">ดูรายการบิลรับคืนทั้งหมด</p>
-          </div>
+      {# ========== 1. Header ========== #}
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 tracking-tight">รายงานการรับคืนสินค้า</h1>
+          <p class="text-gray-500 mt-1 text-base">ตรวจสอบยอดเงินคืน ส่วนลด และจำนวนสินค้าที่รับคืน</p>
         </div>
+        
       </div>
-
+      
       {# Messages #}
       {% include "partials/messages.html" %}
 
-      {# ========== สถิติ ========== #}
-      <div class="stats shadow mb-6 w-full">
-        <div class="stat">
-          <div class="stat-figure text-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-            </svg>
+      {# ========== 2. Key Metrics (4 Cards ครบถ้วน) ========== #}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        {# Card 1: ยอดคืนเงินรวม #}
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 stat-card">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide">ยอดคืนเงินสุทธิ</p>
+              <h3 class="text-2xl font-bold text-red-600 mt-1">{{ metrics.total_amount|default:0|abs|floatformat:2|intcomma }}</h3>
+            </div>
           </div>
-          <div class="stat-title">บิลรับคืนทั้งหมด</div>
-          <div class="stat-value text-primary">{{ summary.count|default:0 }}</div>
-          <div class="stat-desc">บิล</div>
         </div>
 
-        <div class="stat">
-          <div class="stat-figure text-secondary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+        {# Card 2: จำนวนสินค้าคืน #}
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 stat-card">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide">สินค้าคืนทั้งหมด</p>
+              <h3 class="text-2xl font-bold text-gray-900 mt-1">{{ metrics.total_quantity|default:0|floatformat:0|intcomma }}</h3>
+              <span class="text-xs text-gray-400">ชิ้น</span>
+            </div>
           </div>
-          <div class="stat-title">ยอดคืนรวม</div>
-          <div class="stat-value text-secondary">{{ summary.total_amount|abs|default:0|floatformat:2|intcomma }}</div>
-          <div class="stat-desc">บาท</div>
         </div>
 
-        <div class="stat">
-          <div class="stat-figure text-accent">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-            </svg>
+        {# Card 3: ส่วนลดคืนรวม #}
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 stat-card">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide">ส่วนลดที่คืน</p>
+              <h3 class="text-2xl font-bold text-green-600 mt-1">{{ metrics.total_discount|default:0|floatformat:2|intcomma }}</h3>
+              <span class="text-xs text-gray-400">บาท</span>
+            </div>
           </div>
-          <div class="stat-title">ส่วนลดที่คืน</div>
-          <div class="stat-value text-accent">{{ summary.total_discount|default:0|floatformat:2|intcomma }}</div>
-          <div class="stat-desc">บาท</div>
         </div>
 
-        <div class="stat">
-          <div class="stat-figure text-info">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-            </svg>
+        {# Card 4: จำนวนบิล #}
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 stat-card">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide">จำนวนรายการ</p>
+              <h3 class="text-2xl font-bold text-gray-900 mt-1">{{ metrics.total_count|default:0|intcomma }}</h3>
+              <span class="text-xs text-gray-400">บิล</span>
+            </div>
           </div>
-          <div class="stat-title">จำนวนสินค้าที่คืน</div>
-          <div class="stat-value text-info">{{ summary.total_quantity|default:0|intcomma }}</div>
-          <div class="stat-desc">ชิ้น</div>
         </div>
       </div>
 
-      {# ========== ค้นหาและกรอง ========== #}
-      <div class="card bg-white shadow-xl mb-6">
-        <div class="card-body">
-          <h2 class="card-title text-xl mb-4">🔍 ค้นหาและกรอง</h2>
-          
-          <form method="get" class="space-y-4">
-            <div class="grid md:grid-cols-5 gap-4">
-              {# ค้นหา #}
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-semibold">🔍 ค้นหา</span>
-                </label>
-                <input type="text" name="search" class="input input-bordered" 
-                       placeholder="เลขที่บิลรับคืน, บิลอ้างอิง" value="{{ search }}">
-              </div>
-
-              {# พนักงาน (เฉพาะ Admin) #}
-              {% if request.user.is_superuser %}
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-semibold">👤 พนักงาน</span>
-                </label>
-                <select name="user_id" class="select select-bordered">
-                  <option value="">— ทั้งหมด —</option>
-                  {% comment %}
-                  {% for u in users %}
-                  <option value="{{ u.id }}" {% if selected_user_id == u.id|stringformat:"s" %}selected{% endif %}>
-                    {{ u.username }}
-                  </option>
-                  {% endfor %}
-                  {% endcomment %}
-                </select>
-              </div>
-              {% endif %}
-
-              {# วันที่เริ่มต้น #}
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-semibold">📅 วันที่เริ่มต้น</span>
-                </label>
-                <input type="date" name="date_from" class="input input-bordered" value="{{ date_from }}">
-              </div>
-
-              {# วันที่สิ้นสุด #}
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-semibold">📅 วันที่สิ้นสุด</span>
-                </label>
-                <input type="date" name="date_to" class="input input-bordered" value="{{ date_to }}">
-              </div>
-
-              {# วิธีคืนเงิน #}
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-semibold">💳 วิธีคืนเงิน</span>
-                </label>
-                <select name="refund_method" class="select select-bordered">
-                  <option value="">— ทั้งหมด —</option>
-                  <option value="cash" {% if refund_method == 'cash' %}selected{% endif %}>💵 เงินสด</option>
-                  <option value="transfer" {% if refund_method == 'transfer' %}selected{% endif %}>🏦 โอนเงิน</option>
-                </select>
-              </div>
-
-              {# สถานะ #}
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-semibold">📌 สถานะ</span>
-                </label>
-                <select name="status" class="select select-bordered">
-                  <option value="">— ทั้งหมด —</option>
-                  <option value="DRAFT" {% if status == 'DRAFT' %}selected{% endif %}>📝 Draft</option>
-                  <option value="POSTED" {% if status == 'POSTED' %}selected{% endif %}>✅ Posted</option>
-                  <option value="CANCELLED" {% if status == 'CANCELLED' %}selected{% endif %}>❌ Cancelled</option>
-                </select>
-              </div>
+      {# ========== 3. Main Table Area ========== #}
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        
+        {# Filter Toolbar #}
+        <div class="p-5 border-b border-gray-100 bg-gray-50/50">
+          <form method="get" class="flex flex-col lg:flex-row gap-4 items-center flex-wrap">
+            
+            {# Search #}
+            <div class="flex-1 w-full relative">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input type="text" name="search" class="input input-bordered w-full pl-10 bg-white" 
+                     placeholder="ค้นหาเลขที่บิล, สินค้า..." value="{{ search }}">
+            </div>
+            
+            {# Date Range #}
+            {# Date Range #}
+            <div class="flex gap-2 w-full lg:w-auto">
+              {# ช่องวันที่เริ่มต้น จะแสดงวันที่ปัจจุบันทันที #}
+              <input type="date" name="date_from" 
+                    class="input input-bordered bg-white" 
+                    value="{{ date_from }}"> 
+                    
+              <span class="self-center text-gray-400 font-medium">-</span>
+              
+              {# ช่องวันที่สิ้นสุด #}
+              <input type="date" name="date_to" 
+                    class="input input-bordered bg-white" 
+                    value="{{ date_to }}">
             </div>
 
-            {# ปุ่ม #}
+            {# ตัวเลือกพนักงาน (เฉพาะ Admin) #}
+            {% if all_staff %}
+            <select name="user_id" class="select select-bordered bg-white w-full lg:w-48">
+              <option value="">👤 พนักงานทุกคน</option>
+              {% for staff in all_staff %}
+              <option value="{{ staff.id }}" {% if user_filter == staff.id|slugify %}selected{% endif %}>
+                {{ staff.username }}
+              </option>
+              {% endfor %}
+            </select>
+            {% endif %}
+            {# Status Filter #}
+            <select name="status" class="select select-bordered bg-white w-full lg:w-40">
+              <option value="">📌 ทุกสถานะ</option>
+              <option value="POSTED" {% if status == 'POSTED' %}selected{% endif %}>✅ คืนสำเร็จ</option>
+              <option value="DRAFT" {% if status == 'DRAFT' %}selected{% endif %}>📝 แบบร่าง</option>
+              <option value="CANCELLED" {% if status == 'CANCELLED' %}selected{% endif %}>❌ ยกเลิก</option>
+            </select>
+
             <div class="flex gap-2">
-              <button type="submit" class="btn btn-primary">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                ค้นหา
-              </button>
-              <a href="{% url 'return_list' %}" class="btn btn-ghost">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                รีเซ็ต
-              </a>
+              <button type="submit" class="btn btn-primary px-6">กรอง</button>
+              <a href="{% url 'return_list' %}" class="btn btn-ghost text-gray-500">ล้างค่า</a>
             </div>
           </form>
         </div>
-      </div>
 
-      {# ========== ตารางรายการ ========== #}
-      <div class="card bg-white shadow-xl">
-        <div class="card-body">
-          <h2 class="card-title text-xl mb-4">📋 รายการบิลรับคืน</h2>
-          
-          <div class="overflow-x-auto">
-            <table class="table table-zebra table-sm">
-              <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                <tr>
-                  <th class="text-center">#</th>
-                  <th>เลขที่บิลรับคืน</th>
-                  <th>วันที่รับคืน</th>
-                  <th>บิลอ้างอิง</th>
-                  <th class="text-center">วิธีคืนเงิน</th>
-                  <th class="text-right">ยอดคืน</th>
-                  <th class="text-right">ส่วนลด</th>
-                  <th class="text-right">ยอดรวม</th>
-                  <th class="text-center">สถานะ</th>
-                  <th>ผู้บันทึก</th>
-                  <th class="text-center">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in returns %}
-                <tr>
-                  <td class="text-center">{{ forloop.counter }}</td>
-                  
-                  {# เลขที่บิลรับคืน #}
-                  <td>
-                    <span class="font-mono font-bold text-sm">{{ item.doc_no }}</span>
-                    {% if item.remark %}
-                    <div class="text-xs text-gray-400 truncate max-w-[150px]" title="{{ item.remark }}">
-                      📝 {{ item.remark|slice:":30" }}
-                    </div>
-                    {% endif %}
-                  </td>
-                  
-                  {# วันที่รับคืน #}
-                  <td>{{ item.sale_date|date:"d/m/Y H:i" }}</td>
-                  
-                  {# บิลอ้างอิง #}
-                  <td>
-                    <span class="badge badge-ghost badge-sm font-mono">🧾 {{ item.ref_doc_no|default:"-" }}</span>
-                  </td>
-                  
-                  {# วิธีคืนเงิน #}
-                  <td class="text-center">
-                    {% if item.payment %}
-                      {% if item.payment.method == 'cash' %}
-                        <span class="badge badge-success badge-sm">💵 เงินสด</span>
-                      {% elif item.payment.method == 'transfer' %}
-                        <span class="badge badge-warning badge-sm">🏦 โอนเงิน</span>
-                      {% else %}
-                        <span class="badge badge-ghost badge-sm">{{ item.payment.method }}</span>
-                      {% endif %}
-                    {% else %}
-                      <span class="badge badge-error badge-sm">❌ ไม่มีข้อมูล</span>
-                    {% endif %}
-                  </td>
-                  
-                  {# ยอดคืน (ก่อนส่วนลด) #}
-                  <td class="text-right">
-                    <span class="font-semibold text-orange-600">{{ item.total_amount|abs|floatformat:2 }}</span>
-                  </td>
-                  
-                  {# ส่วนลด #}
-                  <td class="text-right">
-                    {% if item.discount_amount > 0 %}
-                      <span class="text-orange-600">-{{ item.discount_amount|floatformat:2 }}</span>
-                    {% else %}
-                      <span class="text-gray-400">-</span>
-                    {% endif %}
-                  </td>
-                  
-                  {# ยอดรวม (หลังหักส่วนลด) #}
-                  <td class="text-right">
-                    <span class="font-bold text-error text-base">{{ item.grand_total|abs|floatformat:2 }}</span>
-                  </td>
-                  
-                  {# สถานะ #}
-                  <td class="text-center">
-                    {% if item.status == 'DRAFT' %}
-                      <span class="badge badge-ghost">📝 Draft</span>
-                    {% elif item.status == 'POSTED' %}
-                      <span class="badge badge-success">✅ Posted</span>
-                    {% elif item.status == 'CANCELLED' %}
-                      <span class="badge badge-error">❌ Cancelled</span>
-                    {% endif %}
-                  </td>
-                  
-                  {# ผู้บันทึก #}
-                  <td>{{ item.created_by.username }}</td>
-                  
-                  {# จัดการ #}
-                  <td class="text-center">
-                    <div class="flex justify-center gap-2">
-                      {# ปุ่มดูบิล #}
-                      <a href="{% url 'return_detail' item.id %}"
-                         onclick="viewBill(this.href); return false;"
-                         class="btn btn-warning btn-sm gap-1 shadow hover:shadow-lg transition-all">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        <span class="font-semibold">ดูบิล</span>
-                      </a>
-                      
+        {# Table #}
+        <div class="overflow-x-auto">
+          <table class="table table-clean w-full">
+            <thead>
+              <tr>
+                <th class="w-16 text-center">#</th>
+                <th>ใบคืนสินค้า / วันที่</th>
+                <th>พนักงาน</th>
+                <th class="text-right">สินค้า (ชิ้น)</th>
+                <th class="text-right">ส่วนลด (บาท)</th>
+                <th class="text-right">ยอดคืนสุทธิ</th>
+                <th class="text-center">สถานะ</th>
+                <th class="text-center w-32">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ret in returns %}
+              <tr class="group hover:bg-gray-50 transition-colors">
+                <td class="text-center text-gray-400 font-mono text-sm">{{ forloop.counter }}</td>
+                
+                <td>
+                  <div class="flex flex-col gap-1">
+                    <span class="font-bold text-gray-800 font-mono text-base tracking-tight">{{ ret.doc_no }}</span>
+                    <span class="text-sm text-gray-500">{{ ret.transaction_date|date:"d M Y • H:i" }}</span>
+                  </div>
+                  {% if ret.ref_doc_no %}
+                  <div class="mt-2 text-sm text-gray-500 flex items-center gap-1 bg-blue-50 w-fit px-2 py-0.5 rounded">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    จาก: <span class="font-mono font-medium text-blue-600">{{ ret.ref_doc_no }}</span>
+                  </div>
+                  {% endif %}
+                </td>
+                
+                <td>
+                  <div class="flex items-center gap-3">
+                     <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600 border border-gray-200">
+                        {{ ret.created_by.username|slice:":1"|upper }}
+                     </div>
+                     <span class="text-sm font-medium text-gray-700">{{ ret.created_by.username }}</span>
+                  </div>
+                </td>
+                
+                {# คอลัมน์จำนวนสินค้า #}
+                <td class="text-right">
+                  <span class="font-bold text-gray-700 text-base">
+                    {{ ret.items.count|default:0 }}
+                  </span>
+                </td>
 
-                    </div>
-                  </td>
-                </tr>
-                {% empty %}
-                <tr>
-                  <td colspan="11" class="text-center py-8">
-                    <div class="text-4xl mb-2">📭</div>
-                    <div class="text-gray-500">ไม่พบบิลรับคืน</div>
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-
-          {# Pagination #}
-          {% if returns.has_other_pages %}
-          <div class="flex justify-center mt-6">
-            <div class="join">
-              {% if returns.has_previous %}
-                <a href="?page={{ returns.previous_page_number }}&search={{ search }}&refund_method={{ refund_method }}&status={{ status }}&date_from={{ date_from }}&date_to={{ date_to }}" 
-                   class="join-item btn">«</a>
-              {% endif %}
-              
-              <button class="join-item btn">หน้า {{ returns.number }} / {{ returns.paginator.num_pages }}</button>
-              
-              {% if returns.has_next %}
-                <a href="?page={{ returns.next_page_number }}&search={{ search }}&refund_method={{ refund_method }}&status={{ status }}&date_from={{ date_from }}&date_to={{ date_to }}" 
-                   class="join-item btn">»</a>
-              {% endif %}
-            </div>
-          </div>
-          {% endif %}
+                {# คอลัมน์ส่วนลด #}
+                <td class="text-right">
+                  {% if ret.discount_amount and ret.discount_amount > 0 %}
+                    <span class="text-green-600 font-medium text-base">-{{ ret.discount_amount|floatformat:2 }}</span>
+                  {% else %}
+                    <span class="text-gray-300">-</span>
+                  {% endif %}
+                </td>
+                
+                {# คอลัมน์ยอดคืนสุทธิ #}
+                <td class="text-right">
+                  <span class="font-bold text-red-600 text-base">{{ ret.grand_total|abs|floatformat:2|intcomma }}</span>
+                </td>
+                
+                <td class="text-center">
+                  {% if ret.status == 'POSTED' %}
+                    <div class="badge badge-success gap-1 text-white py-3 px-3 border-0 shadow-sm">คืนสำเร็จ</div>
+                  {% elif ret.status == 'DRAFT' %}
+                    <div class="badge badge-ghost gap-1 py-3 px-3">แบบร่าง</div>
+                  {% elif ret.status == 'CANCELLED' %}
+                    <div class="badge badge-error gap-1 text-white py-3 px-3">ยกเลิก</div>
+                  {% endif %}
+                </td>
+                
+                <td class="text-center">
+                  <button onclick="viewReturn('{% url 'return_detail' ret.id %}')"
+                          class="btn btn-sm btn-outline btn-primary">
+                    รายละเอียด
+                  </button>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="8" class="text-center py-16">
+                  <div class="flex flex-col items-center justify-center text-gray-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    <p class="text-base font-medium">ยังไม่มีรายการคืนสินค้า</p>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
+        
+        {# Pagination #}
+        {% if returns.has_other_pages %}
+        <div class="p-4 border-t border-gray-100 flex justify-center bg-gray-50/30">
+          <div class="join shadow-sm bg-white">
+            {% if returns.has_previous %}
+              <a href="?page={{ returns.previous_page_number }}&status={{ status }}&search={{ search }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}" 
+                 class="join-item btn btn-md bg-white border-gray-200 hover:bg-gray-50">«</a>
+            {% endif %}
+            
+            <button class="join-item btn btn-md bg-white border-gray-200 no-animation font-normal text-gray-500 cursor-default">หน้า {{ returns.number }} / {{ returns.paginator.num_pages }}</button>
+            
+            {% if returns.has_next %}
+              <a href="?page={{ returns.next_page_number }}&status={{ status }}&search={{ search }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}" 
+                 class="join-item btn btn-md bg-white border-gray-200 hover:bg-gray-50">»</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
       </div>
-
+      
     </div>
   </main>
 </div>
 
-{# ========== Modal สำหรับดูบิล ========== #}
-<dialog id="bill_modal" class="modal">
-  <div class="modal-box w-11/12 max-w-4xl h-[90vh] p-0 overflow-hidden relative bg-base-200">
-    
+{# Modal #}
+<dialog id="return_modal" class="modal backdrop-blur-sm">
+  <div class="modal-box w-11/12 max-w-4xl h-[90vh] p-0 overflow-hidden relative bg-gray-100 shadow-2xl rounded-xl">
     <form method="dialog">
-      <button class="btn btn-sm btn-circle btn-error absolute right-2 top-2 z-50 shadow-lg text-white">✕</button>
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 z-50 bg-white shadow-md hover:bg-gray-100 text-gray-500">✕</button>
     </form>
-    
-    <iframe id="receipt_frame" src="" class="w-full h-full border-none"></iframe>
-    
+    <iframe id="return_frame" src="" class="w-full h-full border-none"></iframe>
   </div>
 </dialog>
 
-{# ========== JavaScript ========== #}
 <script>
-  // ฟังก์ชันดูบิล (โหลดหน้าใบเสร็จใส่ iframe)
-  function viewBill(url) {
-    const modal = document.getElementById('bill_modal');
-    const iframe = document.getElementById('receipt_frame');
-    
-    // ✅ เพิ่ม parameter source=modal
-    const urlWithParam = url + (url.includes('?') ? '&' : '?') + 'source=modal';
-    iframe.src = urlWithParam;
-    
-    // เปิด Modal
+  function viewReturn(url) {
+    const modal = document.getElementById('return_modal');
+    const iframe = document.getElementById('return_frame');
+    iframe.src = url;
     modal.showModal();
   }
-
-
-  // Auto submit เมื่อเปลี่ยน filter
-  document.querySelectorAll('select[name="refund_method"], select[name="status"], input[type="date"]').forEach(element => {
-    element.addEventListener('change', function() {
-      this.form.submit();
-    });
-  });
 </script>
 
 </body>

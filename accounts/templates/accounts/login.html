@@ -1,111 +1,130 @@
 {% load tailwind_tags %}
 <!doctype html>
-<html lang="th" data-theme="light">
+<html lang="th">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>🔐 เข้าสู่ระบบ - POS</title>
+  <title>เข้าสู่ระบบ - ระบบขายอะไหล่</title>
   {% tailwind_css %}
 </head>
-<body class="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 min-h-screen flex items-center justify-center">
+<body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen flex items-center justify-center p-4">
 
-  <div class="container mx-auto px-4">
-    <div class="max-w-md mx-auto">
+  <div class="w-full max-w-md">
+    
+    {# Card หลัก #}
+    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
       
-      {# Card #}
-      <div class="card bg-white shadow-2xl">
-        <div class="card-body p-8">
-          
-          {# Logo/Header #}
-          <div class="text-center mb-8">
-            <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.8 4M7 13h9.4a1 1 0 0 0 .98-.804l1.2-6A1 1 0 0 0 17.6 5H5.8M7 13L5.8 7M7 13l-1.6 7.2M9 21h6M9 21a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
-              </svg>
-            </div>
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">ระบบขายอะไหล่</h1>
-            <p class="text-gray-500">กรุณาเข้าสู่ระบบเพื่อใช้งาน</p>
-          </div>
-
-          {# Messages #}
-          {% if messages %}
-            <div class="mb-6 space-y-2">
-              {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} shadow-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>{{ message }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-
-          {# Login Form #}
-          <form method="post" action="{% url 'login' %}">
-            {% csrf_token %}
-            
-            {# Username #}
-            <div class="form-control mb-4">
-              <label class="label">
-                <span class="label-text font-semibold">👤 ชื่อผู้ใช้</span>
-              </label>
-              <input type="text" 
-                     name="username" 
-                     class="input input-bordered input-lg w-full" 
-                     placeholder="กรอกชื่อผู้ใช้"
-                     required
-                     autofocus>
-            </div>
-
-            {# Password #}
-            <div class="form-control mb-6">
-              <label class="label">
-                <span class="label-text font-semibold">🔒 รหัสผ่าน</span>
-              </label>
-              <input type="password" 
-                     name="password" 
-                     class="input input-bordered input-lg w-full" 
-                     placeholder="กรอกรหัสผ่าน"
-                     required>
-            </div>
-
-            {# Submit Button #}
-            <button type="submit" class="btn btn-primary btn-lg w-full gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-              </svg>
-              เข้าสู่ระบบ
-            </button>
-          </form>
-
-          {# Footer #}
-          <div class="text-center mt-6 text-sm text-gray-500">
-            <p>ระบบจัดการขาย POS</p>
-            <p class="mt-1">© 2025 All rights reserved</p>
-          </div>
-
+      {# Header Section #}
+      <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-8 text-center">
+        <div class="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl mx-auto mb-4 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
         </div>
+        <h1 class="text-2xl font-bold text-white mb-1">ยินดีต้อนรับ</h1>
+        <p class="text-blue-100 text-sm">ระบบขายอะไหล่รถยนต์</p>
       </div>
 
-      {# Info Card #}
-      <div class="card bg-white/90 shadow-xl mt-4">
-        <div class="card-body p-4">
-          <div class="text-sm text-gray-600">
-            <p class="font-semibold mb-2">💡 ข้อมูลสำหรับทดสอบ:</p>
-            <p>• Username: <span class="font-mono bg-gray-100 px-2 py-1 rounded">admin</span></p>
-            <p>• Password: <span class="font-mono bg-gray-100 px-2 py-1 rounded">admin123</span></p>
+      {# Form Section #}
+      <div class="p-8">
+        
+        {# Messages #}
+        {% if messages %}
+          <div class="mb-6 space-y-2">
+            {% for message in messages %}
+              <div class="{% if message.tags == 'error' %}bg-red-50 border-l-4 border-red-500 text-red-700{% else %}bg-blue-50 border-l-4 border-blue-500 text-blue-700{% endif %} p-4 rounded-r">
+                <p class="text-sm font-medium">{{ message }}</p>
+              </div>
+            {% endfor %}
           </div>
-        </div>
+        {% endif %}
+
+        {# Login Form #}
+        <form method="post" action="{% url 'login' %}" class="space-y-5">
+          {% csrf_token %}
+          
+          {# Username #}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              ชื่อผู้ใช้
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <input 
+                type="text" 
+                name="username" 
+                class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200" 
+                placeholder="กรอกชื่อผู้ใช้"
+                required
+                autofocus>
+            </div>
+          </div>
+
+          {# Password #}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              รหัสผ่าน
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <input 
+                type="password" 
+                name="password" 
+                class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200" 
+                placeholder="กรอกรหัสผ่าน"
+                required>
+            </div>
+          </div>
+
+          {# Submit Button #}
+          <button 
+            type="submit" 
+            class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition duration-200 flex items-center justify-center gap-2">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+            เข้าสู่ระบบ
+          </button>
+        </form>
+
+      </div>
+
+      {# Footer #}
+      <div class="px-8 py-4 bg-gray-50 border-t border-gray-100">
+        <p class="text-center text-xs text-gray-500">
+          © 2025 ระบบขายอะไหล่รถยนต์ - สงวนลิขสิทธิ์
+        </p>
       </div>
 
     </div>
-  </div>
 
-  <script>
-    // Auto focus username input
-    document.querySelector('input[name="username"]').focus();
-  </script>
+    {# Info Card (แสดงเฉพาะ Debug Mode) #}
+    {% if debug %}
+    <div class="mt-4 bg-white rounded-lg shadow-md p-4">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div class="text-sm">
+          <p class="font-medium text-gray-700 mb-1">ข้อมูลทดสอบ:</p>
+          <p class="text-gray-600">Username: <span class="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">admin</span></p>
+          <p class="text-gray-600">Password: <span class="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">admin123</span></p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
 
 </body>
 </html>

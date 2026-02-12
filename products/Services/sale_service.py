@@ -1,85 +1,70 @@
-"""
-Sale Service: Business Logic สำหรับการขาย
-
-แยก Logic ออกจาก Views และ Models เพื่อ:
-- ง่ายต่อการทดสอบ (Testing)
-- ง่ายต่อการนำกลับมาใช้ (Reusable)
-- ง่ายต่อการบำรุงรักษา (Maintainable)
-"""
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction as db_transaction # ✅ ตั้งชื่อ alias กันชื่อซ้ำกับ Model Transaction
 from decimal import Decimal
 from products.models import (
-    Sale, SaleItem,Product, StockMovement
+    Transaction, TransactionItem, Product, StockMovement
 )
 from products.Services.payment_service import PaymentService
 
 # ===================================
-# 1. สร้างบิลขาย (Transaction) - แก้ไขรองรับ Return
+# 1. สร้างบิลขาย (Transaction)
 # ===================================
 def create_sale_transaction(user, items_data, price_type='retail', discount_amount=0, remark='', doc_no=None, doc_type='SALE', ref_doc_no='', status='DRAFT', sale_id=None):
-    """
-    สร้างบิลขายหรือบิลคืน พร้อมรายการสินค้า
-    ✅ เพิ่ม parameter: doc_type, ref_doc_no, status, sale_id
-    """
-    
     if not items_data:
         raise ValueError("ไม่มีรายการสินค้า")
     
     try:
-        with transaction.atomic():
-            
-            # ----------------------------------------------------
-            # 1. สร้างหรือแก้ไขหัวบิล (Sale Header)
-            # ----------------------------------------------------
+        with db_transaction.atomic():
+            # 1.1 สร้าง/แก้ไข Header
             if sale_id:
-                # กรณีแก้ไขบิลเดิม (เช่น ดึงบิลพักมาทำต่อ)
                 try:
-                    sale = Sale.objects.get(id=sale_id)
-                    # ลบรายการสินค้าเก่าทิ้งก่อน (เดี๋ยวบันทึกใหม่จากตะกร้า)
+                    sale = Transaction.objects.get(id=sale_id)
                     sale.items.all().delete()
-                    
-                    # อัปเดตข้อมูล
                     sale.doc_type = doc_type
                     sale.ref_doc_no = ref_doc_no
                     sale.status = status
                     sale.discount_amount = Decimal(str(discount_amount))
                     sale.remark = remark
+                    sale.updated_at = timezone.now()
                     sale.save()
-                    
-                except Sale.DoesNotExist:
+                except Transaction.DoesNotExist:
                     raise ValueError("ไม่พบข้อมูลบิลที่ต้องการแก้ไข")
             else:
-                # กรณีสร้างใหม่
-                sale = Sale.objects.create(
+                sale = Transaction.objects.create(
                     doc_no=doc_no,
-                    doc_type=doc_type,       # ✅ บันทึกประเภท (SALE/RETURN)
-                    ref_doc_no=ref_doc_no,   # ✅ บันทึกอ้างอิง
-                    status=status,           # ✅ บันทึกสถานะ (DRAFT/HOLD)
+                    doc_type=doc_type,
+                    ref_doc_no=ref_doc_no,
+                    status=status,
                     discount_amount=Decimal(str(discount_amount)),
                     remark=remark,
                     created_by=user,
                 )
             
-            # ----------------------------------------------------
-            # 2. เพิ่มรายการสินค้า (Sale Items)
-            # ----------------------------------------------------
+            # 1.2 เพิ่มรายการสินค้า
+            total_amount = Decimal('0')
+            
             for item_data in items_data:
-                
-                # ดึงสินค้า
                 try:
-                    product = Product.objects.select_related('category').get(
-                        id=item_data['product_id'],
-                        is_active=True
-                    )
+                    product = Product.objects.select_related('category').get(id=item_data['product_id'], is_active=True)
                 except Product.DoesNotExist:
                     raise ValueError(f"ไม่พบสินค้า ID {item_data['product_id']}")
                 
+                unit_type = item_data.get('unit_type', 'ชิ้น')
+                display_sku = product.sku
+                bundle_items = item_data.get('bundle_items', [])
+                
+                # ถ้าหน้าจอไม่ได้ส่งมา ให้ลองเช็คจาก Database (สินค้าชุดปกติ)
+                if not bundle_items and product.is_bundle:
+                    bundle_items = list(product.bundle_components.values_list('id', flat=True))
+                
+                # ✅ LOGIC ใหม่: ใช้ bundle_components แทน bundle_group
+                if product.is_bundle:
+                    # ดึง ID ลูกๆ มาเก็บไว้ตัดสต็อก (Snapshot)
+                    bundle_items = list(product.bundle_components.values_list('id', flat=True))
+
                 # แปลงจำนวน
                 quantity = Decimal(str(item_data['quantity']))
-                
-                if quantity <= 0:
-                    raise ValueError(f"จำนวนสินค้า {product.name} ไม่ถูกต้อง")
+                if quantity <= 0: raise ValueError(f"จำนวนสินค้า {product.name} ไม่ถูกต้อง")
                 
                 # กำหนดราคา
                 if 'custom_price' in item_data and item_data['custom_price'] is not None:
@@ -87,262 +72,226 @@ def create_sale_transaction(user, items_data, price_type='retail', discount_amou
                 else:
                     unit_price = product.wholesale_price if price_type == 'wholesale' else product.selling_price
                 
-                # ----------------------------------------------------
-                # ✅ Logic เช็คสต็อก (สำคัญ!)
-                # ----------------------------------------------------
-                # เช็คเฉพาะตอน "ขาย (SALE)" เท่านั้น
-                # ถ้าเป็น "คืน (RETURN)" ไม่ต้องเช็ค เพราะเรากำลังเอาของมาคืนใส่สต็อก
-                if doc_type == 'SALE':
-                    current_stock = product.quantity or 0
+                # ✅ เช็คสต็อก (เฉพาะสินค้าปกติ)
+                if doc_type == 'SALE' and not product.is_bundle:
+                    current_stock = Decimal(str(product.quantity or 0))
                     if current_stock < quantity:
-                        raise ValueError(
-                            f"สินค้า {product.name} มีสต็อกไม่พอ\n"
-                            f"ต้องการ: {quantity} {product.unit}\n"
-                            f"เหลือ: {current_stock} {product.unit}"
-                        )
+                        raise ValueError(f"สินค้า {product.name} มีสต็อกไม่พอ (เหลือ {current_stock:g} {product.unit})")
+                elif doc_type == 'SALE' and product.is_bundle:
+                    # ถ้าหน้าจอส่ง list ลูกมาใช้จากหน้าจอ ถ้าไม่มีดึงจาก DB
+                    check_items = bundle_items if bundle_items else product.bundle_components.all()
+                    
+                    for item_ref in check_items:
+                        # กรณีเป็น ID (จากหน้าจอ/values_list)
+                        if isinstance(item_ref, int): 
+                            comp = Product.objects.get(id=item_ref)
+                        else: # กรณีเป็น Object (จาก .all())
+                            comp = item_ref
+                            
+                        # คำนวณ: 1 ชุดใช้ลูก 1 ชิ้น * จำนวนชุดที่ขาย
+                        req_qty = quantity 
+                        if comp.quantity < req_qty:
+                             raise ValueError(f"สินค้าในชุด '{comp.name}' มีสต็อกไม่พอ (เหลือ {comp.quantity:g} ชิ้น)")
+                # คำนวณยอด
+                line_total = quantity * unit_price
+                total_amount += line_total
                 
-                # บันทึกรายการ
-                SaleItem.objects.create(
-                    sale=sale,
+                # สร้างรายการ
+                TransactionItem.objects.create(
+                    transaction=sale,
                     product=product,
                     quantity=quantity,
                     unit_price=unit_price,
                     cost_price=product.cost_price,
+                    line_total=line_total,
+                    unit_type=unit_type,
+                    display_sku=display_sku,
+                    bundle_items=bundle_items # ✅ บันทึกสูตรไว้ตัดสต็อก
                 )
             
-            # คำนวณยอดรวมสุทธิอัปเดตกลับไปที่หัวบิล
-            sale.calculate_totals()
+            # 1.3 อัปเดตท้ายบิล
+            sale.total_amount = total_amount
+            sale.grand_total = total_amount - sale.discount_amount
+            sale.save(update_fields=['total_amount', 'grand_total'])
             
             return sale
             
     except Exception as e:
-        raise ValueError(f"เกิดข้อผิดพลาด: {str(e)}")
-
+        raise e
 
 # ===================================
 # 2. ยืนยันบิลขาย (ตัดสต็อก)
 # ===================================
-def post_sale(sale):
-    """
-    ยืนยันบิลขาย → ตัดสต็อก
-    
-    Args:
-        sale: Sale object
-    
-    Returns:
-        True
-    """
-    
-    if sale.status == 'POSTED':
-        return True
-    
-    if sale.status == 'CANCELLED':
-        raise ValueError("ไม่สามารถยืนยันบิลที่ยกเลิกแล้ว")
+def post_sale(sale_obj):
+    if sale_obj.status == 'POSTED': return True
+    if sale_obj.status == 'CANCELLED': raise ValueError("ไม่สามารถยืนยันบิลที่ยกเลิกแล้ว")
     
     try:
-        with transaction.atomic():
-            
-            # ✅ ตัดสต็อก (ง่ายขึ้น!)
-            for item in sale.items.select_related('product').all():
+        with db_transaction.atomic():
+            for item in sale_obj.items.select_related('product').all():
                 
-                # ดึง Inventory (Lock Row)
-                product = Product.objects.select_for_update().get(id=item.product.id)
-                
-                # ✅ Validate สต็อก
-                if product.quantity < item.quantity:
-                    raise ValueError(
-                        f"สินค้า {item.product.name} มีสต็อกไม่พอ\n"
-                        f"ต้องการ: {item.quantity} {item.product.unit}\n"
-                        f"เหลือ: {product.quantity} {item.product.unit}"
+                # ⭐ ตัดสต็อก: ถ้ามี bundle_items ให้ตัดลูก
+                if item.bundle_items:
+                    for product_id in item.bundle_items:
+                        product = Product.objects.select_for_update().get(id=product_id)
+                        
+                        item_qty = Decimal(str(item.quantity)) # ขาย 1 คู่ ตัดลูก 1 ชิ้น
+                        current_stock = Decimal(str(product.quantity or 0))
+                        
+                        if current_stock < item_qty:
+                            raise ValueError(f"สินค้าในชุด {item.product.name} ({product.name}) สต็อกไม่พอ")
+                        
+                        product.quantity -= int(item_qty)
+                        product.save(update_fields=['quantity'])
+                        
+                        StockMovement.objects.create(
+                            product=product,
+                            movement_type='OUT',
+                            quantity=item.quantity,
+                            unit_cost=item.cost_price,
+                            balance_after=product.quantity,
+                            reference=sale_obj.doc_no,
+                            note=f"ขายชุด {item.product.sku}"
+                        )
+                else:
+                    # ตัดสต็อกสินค้าปกติ
+                    product = Product.objects.select_for_update().get(id=item.product.id)
+                    item_qty = Decimal(str(item.quantity))
+                    
+                    if product.quantity < item_qty:
+                        raise ValueError(f"สินค้า {product.name} สต็อกไม่พอ")
+                    
+                    product.quantity -= int(item_qty)
+                    product.save(update_fields=['quantity'])
+                    
+                    StockMovement.objects.create(
+                        product=item.product,
+                        movement_type='OUT',
+                        quantity=item.quantity,
+                        unit_cost=item.cost_price,
+                        balance_after=product.quantity,
+                        reference=sale_obj.doc_no,
+                        note=f"ขายปลีก"
                     )
-                
-                # ✅ ตัดสต็อก (ใช้ quantity ตรงๆ)
-                product.quantity -= item.quantity
-                product.save(update_fields=['quantity'])
-                
-                # บันทึก Stock Movement
-                StockMovement.objects.create(
-                    product=item.product,
-                    movement_type='OUT',
-                    quantity=item.quantity,
-                    cost=item.cost_price,
-                    balance_after=product.quantity,
-                    reference=sale.doc_no,
-                )
             
-            # เปลี่ยนสถานะ
-            sale.status = 'POSTED'
-            sale.sale_date = timezone.now()
-            sale.save(update_fields=['status', 'sale_date'])
-            
+            sale_obj.status = 'POSTED'
+            if hasattr(sale_obj, 'transaction_date'):
+                sale_obj.transaction_date = timezone.now()
+                sale_obj.save(update_fields=['status', 'transaction_date'])
+            else:
+                sale_obj.save(update_fields=['status'])
             return True
             
     except Exception as e:
-        raise ValueError(f"ไม่สามารถยืนยันบิลได้: {str(e)}")
-
-
+        raise ValueError(f"ยืนยันบิลไม่สำเร็จ: {str(e)}")
 # ===================================
 # 3. ยกเลิกบิลขาย (คืนสต็อก)
 # ===================================
-def cancel_sale(sale):
+def cancel_sale(sale_obj):
     """
-    ยกเลิกบิลขาย → คืนสต็อก
-    
-    Args:
-        sale: Sale object
-    
-    Returns:
-        True
+    ยกเลิกบิลขาย -> คืนสต็อก (Revert Sale)
     """
-    
-    if sale.status == 'CANCELLED':
+    if sale_obj.status == 'CANCELLED':
         return True
     
-    if sale.status != 'POSTED':
-        raise ValueError("สามารถยกเลิกได้เฉพาะบิลที่ยืนยันแล้วเท่านั้น")
+    # ถ้ายังไม่ POSTED คือยังไม่ตัดของ ก็แค่เปลี่ยนสถานะ
+    if sale_obj.status != 'POSTED':
+        sale_obj.status = 'CANCELLED'
+        sale_obj.save(update_fields=['status'])
+        return True
     
     try:
-        with transaction.atomic():
-            
-            # ✅ คืนสต็อก
-            for item in sale.items.all():
+        with db_transaction.atomic():
+            for item in sale_obj.items.all():
+                qty = item.quantity
                 
-                # ดึง Inventory (Lock Row)
-                product = Product.objects.select_for_update().get(id=item.product.id)
-                
-                # ✅ คืนสต็อก (ใช้ quantity ตรงๆ)
-                product.quantity += item.quantity
-                product.save(update_fields=['quantity'])
-                
-                # บันทึก Stock Movement
-                StockMovement.objects.create(
-                    product=item.product,
-                    movement_type='IN',
-                    quantity=item.quantity,
-                    cost=item.cost_price,
-                    balance_after=product.quantity,
-                    reference=f'CANCEL-{sale.doc_no}',
-                )
+                # ✅ LOGIC ใหม่: เช็คว่ารายการนี้มีสูตร Bundle หรือไม่ (จาก Snapshot)
+                # รองรับทั้งสินค้าชุดปกติ และ สินค้าจับคู่หน้างาน
+                if item.bundle_items:
+                    # วนลูปคืนสต็อกให้ลูกๆ ตาม ID ที่บันทึกไว้
+                    for child_id in item.bundle_items:
+                        try:
+                            # ล็อคแถวเพื่อป้องกัน Race Condition
+                            child = Product.objects.select_for_update().get(id=child_id)
+                            
+                            # คืนสต็อก (IN)
+                            child.quantity = (child.quantity or 0) + int(qty)
+                            child.save(update_fields=['quantity'])
+                            
+                            # บันทึก Movement
+                            StockMovement.objects.create(
+                                product=child,
+                                movement_type='IN',
+                                quantity=qty,
+                                unit_cost=child.cost_price,
+                                balance_after=child.quantity,
+                                reference=f'CANCEL-{sale_obj.doc_no}',
+                                note=f"ยกเลิกบิลขาย {sale_obj.doc_no} (คืนชุด {item.display_sku})"
+                            )
+                        except Product.DoesNotExist:
+                            pass # ถ้าสินค้าลูกถูกลบไปแล้ว ให้ข้าม
+                            
+                # ✅ กรณีสินค้าปกติ -> คืนให้ตัวมันเอง
+                else:
+                    product = Product.objects.select_for_update().get(id=item.product.id)
+                    product.quantity = (product.quantity or 0) + int(qty)
+                    product.save(update_fields=['quantity'])
+                    
+                    StockMovement.objects.create(
+                        product=product,
+                        movement_type='IN',
+                        quantity=qty,
+                        unit_cost=item.cost_price,
+                        balance_after=product.quantity,
+                        reference=f'CANCEL-{sale_obj.doc_no}',
+                        note=f"ยกเลิกบิลขาย {sale_obj.doc_no}"
+                    )
             
-            # เปลี่ยนสถานะ
-            sale.status = 'CANCELLED'
-            sale.save(update_fields=['status'])
+            # เปลี่ยนสถานะบิล
+            sale_obj.status = 'CANCELLED'
+            sale_obj.save(update_fields=['status'])
             
-            # ยกเลิก Payment
-            if hasattr(sale, 'payment'):
-                sale.payment.status = 'void'
-                sale.payment.save(update_fields=['status'])
+            # ยกเลิก Payment (ถ้ามี)
+            if hasattr(sale_obj, 'payment') and sale_obj.payment:
+                sale_obj.payment.status = 'void'
+                sale_obj.payment.save(update_fields=['status'])
             
             return True
             
     except Exception as e:
         raise ValueError(f"ไม่สามารถยกเลิกบิลได้: {str(e)}")
 
-
-
 # ===================================
-# 5. ฟังก์ชันเสริม
+# 4. ฟังก์ชันเสริม (Wrapper)
 # ===================================
-def get_sale_summary(sale):
+def create_payment(sale_obj, method='cash', received=None, note=''):
     """
-    สรุปข้อมูลบิลขาย
-    
-    Args:
-        sale: Sale object
-    
-    Returns:
-        dict: สรุปข้อมูล
+    Wrapper function เรียก PaymentService
     """
-    
-    items = sale.items.select_related('product').all()
-    
-    total_items = items.count()
-    total_quantity = sum(item.quantity for item in items)
-    total_cost = sum(item.cost_price * item.quantity for item in items)
-    
-    profit = sale.grand_total - total_cost
-    
-    return {
-        'doc_no': sale.doc_no,
-        'sale_date': sale.sale_date,
-        'status': sale.get_status_display(),
-        'total_items': total_items,
-        'total_quantity': float(total_quantity),
-        'total_amount': float(sale.total_amount),
-        'discount_amount': float(sale.discount_amount),
-        'grand_total': float(sale.grand_total),
-        'total_cost': float(total_cost),
-        'profit': float(profit),
-        'profit_margin': float((profit / sale.grand_total * 100) if sale.grand_total > 0 else 0),
-    }
-
-# ===================================
-# 4. สร้างการชำระเงิน (ใช้ PaymentService)
-# ===================================
-def create_payment(sale, method='cash', received=None, note=''):
-    """
-    สร้างการชำระเงิน
-    
-    Args:
-        sale: Sale object
-        method: 'cash', 'qr', 'transfer'
-        received: เงินที่รับ (สำหรับเงินสด)
-        note: หมายเหตุ
-    
-    Returns:
-        Payment object
-    """
-    # ✅ ใช้ PaymentService แทน
     return PaymentService.create_payment(
-        sale=sale,
+        sale=sale_obj,
         method=method,
         received=received,
         note=note
     )
 
-
 def validate_sale_items(items_data):
     """
-    ตรวจสอบรายการสินค้าก่อนสร้างบิล
-    
-    Args:
-        items_data: list of dict
-    
-    Returns:
-        tuple: (is_valid, errors)
+    Validate ข้อมูลสินค้าเบื้องต้น
     """
-    
     errors = []
-    
     if not items_data:
         errors.append("ไม่มีรายการสินค้า")
         return False, errors
     
     for i, item in enumerate(items_data):
-        
-        # ตรวจสอบ product_id
         if 'product_id' not in item:
             errors.append(f"รายการที่ {i+1}: ไม่มี product_id")
             continue
-        
-        # ตรวจสอบว่ามีสินค้าหรือไม่
+            
         try:
-            product = Product.objects.get(id=item['product_id'], is_active=True)
-        except Product.DoesNotExist:
-            errors.append(f"รายการที่ {i+1}: ไม่พบสินค้า ID {item['product_id']}")
-            continue
-        
-        # ตรวจสอบจำนวน
-        if 'quantity' not in item or float(item['quantity']) <= 0:
-            errors.append(f"รายการที่ {i+1} ({product.name}): จำนวนไม่ถูกต้อง")
-        
-        # ตรวจสอบราคา
-        if 'custom_price' in item:
-            try:
-                price = Decimal(str(item['custom_price']))
-                if price < 0:
-                    errors.append(f"รายการที่ {i+1} ({product.name}): ราคาต้องไม่ติดลบ")
-            except:
-                errors.append(f"รายการที่ {i+1} ({product.name}): ราคาไม่ถูกต้อง")
+            Decimal(str(item.get('quantity', 0)))
+        except:
+            errors.append(f"รายการที่ {i+1}: จำนวนสินค้าไม่ถูกต้อง")
     
     return len(errors) == 0, errors

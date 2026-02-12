@@ -1,0 +1,323 @@
+{% load tailwind_tags %}
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ซัพพลายเออร์ / ตัวแทนจำหน่าย</title>
+  {% tailwind_css %}
+</head>
+<body class="bg-base-200">
+<div class="flex min-h-screen">
+
+  {% include "partials/sidebar.html" %}
+
+  <main class="flex-1 p-8 overflow-y-auto">
+    <div class="max-w-[1800px] mx-auto">
+      
+      {# Header #}
+      <div class="mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">📇 ซัพพลายเออร์ / ตัวแทนจำหน่าย</h1>
+            <p class="text-gray-600">จัดการข้อมูลซัพพลายเออร์และตัวแทนจำหน่าย</p>
+          </div>
+          
+          {# ปุ่มเพิ่มใหม่ #}
+          <button onclick="openAddModal()" class="btn btn-primary gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            เพิ่มใหม่
+          </button>
+        </div>
+      </div>
+
+      {# Messages #}
+      {% include "partials/messages.html" %}
+
+      {# สถิติ #}
+      <div class="stats shadow mb-6 w-full">
+        <div class="stat">
+          <div class="stat-figure text-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <div class="stat-title">ซัพพลายเออร์ทั้งหมด</div>
+          <div class="stat-value text-primary">{{ total_suppliers }}</div>
+          <div class="stat-desc">รายการทั้งหมดในระบบ</div>
+        </div>
+        
+        <div class="stat">
+          <div class="stat-figure text-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <div class="stat-title">สินค้าทั้งหมด</div>
+          <div class="stat-value text-secondary">{{ total_products }}</div>
+          <div class="stat-desc">รายการสินค้าจากซัพพลายเออร์</div>
+        </div>
+      </div>
+
+      {# ค้นหา #}
+      <div class="card bg-white shadow-xl mb-6">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">🔍 ค้นหา</h2>
+          
+          <form method="get" class="flex gap-4">
+            <div class="form-control flex-1">
+              <input type="text" 
+                     name="search" 
+                     class="input input-bordered w-full" 
+                     placeholder="ค้นหา ชื่อ หรือ เบอร์โทร..."
+                     value="{{ search_query }}">
+            </div>
+            
+            <button type="submit" class="btn btn-primary gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              ค้นหา
+            </button>
+            
+            {% if search_query %}
+            <a href="{% url 'supplier_list' %}" class="btn btn-ghost">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              ล้าง
+            </a>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+
+      {# ตารางซัพพลายเออร์ #}
+      <div class="card bg-white shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title text-xl mb-4">📋 รายการซัพพลายเออร์</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead class="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                <tr>
+                  <th class="text-center">#</th>
+                  <th>ชื่อร้าน/บริษัท</th>
+                  <th>เบอร์โทร</th>
+                  <th>ที่อยู่</th>
+                  <th class="text-center">จำนวนสินค้า</th>
+                  <th class="text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for supplier in suppliers %}
+                <tr>
+                  <td class="text-center">
+                    {{ forloop.counter|add:suppliers.start_index|add:"-1" }}
+                  </td>
+                  
+                  <td>
+                    <div class="font-bold text-lg">{{ supplier.name }}</div>
+                  </td>
+                  
+                  <td>
+                    {% if supplier.phone %}
+                      <a href="tel:{{ supplier.phone }}" class="link link-primary">
+                        📞 {{ supplier.phone }}
+                      </a>
+                    {% else %}
+                      <span class="text-gray-400">-</span>
+                    {% endif %}
+                  </td>
+                  
+                  <td>
+                    {% if supplier.address %}
+                      <div class="text-sm max-w-xs whitespace-normal leading-relaxed">
+                        📍 {{ supplier.address }}
+                      </div>
+                    {% else %}
+                      <span class="text-gray-400">-</span>
+                    {% endif %}
+                  </td>
+                  
+                  <td class="text-center">
+                    <span class="badge badge-primary badge-lg">
+                      {{ supplier.product_count }} รายการ
+                    </span>
+                  </td>
+                  
+                  <td class="text-center">
+                    <div class="join">
+                      <button onclick="openEditModal({{ supplier.id }}, '{{ supplier.name|escapejs }}', '{{ supplier.phone|escapejs }}', '{{ supplier.address|escapejs }}')" 
+                              class="btn btn-ghost btn-sm join-item text-warning text-xl" 
+                              title="แก้ไข">
+                        ✏️
+                      </button>
+                      
+                      <form method="post" 
+                            action="{% url 'supplier_delete' supplier.id %}" 
+                            style="display:inline;"
+                            onsubmit="return confirm('⚠️ คุณแน่ใจว่าจะลบ {{ supplier.name }} ใช่หรือไม่?\n\n{% if supplier.product_count > 0 %}⚠️ มีสินค้า {{ supplier.product_count }} รายการเชื่อมโยงอยู่{% endif %}')">
+                        {% csrf_token %}
+                        <button type="submit" 
+                                class="btn btn-ghost btn-sm text-error text-xl" 
+                                title="ลบ">
+                          🗑️
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="6" class="text-center py-8">
+                    <div class="text-4xl mb-2">📦</div>
+                    <div class="text-gray-500">
+                      {% if search_query %}
+                        ไม่พบซัพพลายเออร์ที่ค้นหา "{{ search_query }}"
+                      {% else %}
+                        ยังไม่มีซัพพลายเออร์ในระบบ
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {# Pagination #}
+          {% if suppliers.has_other_pages %}
+          <div class="flex justify-center mt-6">
+            <div class="join">
+              {% if suppliers.has_previous %}
+                <a href="?page={{ suppliers.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="join-item btn">«</a>
+              {% endif %}
+              
+              <button class="join-item btn">หน้า {{ suppliers.number }} / {{ suppliers.paginator.num_pages }}</button>
+              
+              {% if suppliers.has_next %}
+                <a href="?page={{ suppliers.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="join-item btn">»</a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+{# Modal เพิ่ม/แก้ไข #}
+<dialog id="supplierModal" class="modal">
+  <div class="modal-box max-w-2xl">
+    <h3 id="modalTitle" class="font-bold text-2xl mb-4">➕ เพิ่มซัพพลายเออร์ใหม่</h3>
+    
+    <form id="supplierForm" method="post" action="{% url 'supplier_create' %}">
+      {% csrf_token %}
+      
+      {# ชื่อร้าน/บริษัท #}
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text font-semibold">ชื่อร้าน/บริษัท <span class="text-error">*</span></span>
+        </label>
+        <input type="text" 
+               name="name" 
+               id="name"
+               class="input input-bordered w-full" 
+               placeholder="เช่น ABC Auto Parts Co., Ltd."
+               required>
+        <label class="label">
+          <span class="label-text-alt text-gray-500">ชื่อเต็มของร้านค้าหรือบริษัท</span>
+        </label>
+      </div>
+      
+      {# เบอร์โทร #}
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text font-semibold">เบอร์โทรศัพท์</span>
+        </label>
+        <input type="text" 
+               name="phone" 
+               id="phone"
+               class="input input-bordered w-full" 
+               placeholder="เช่น 081-234-5678">
+        <label class="label">
+          <span class="label-text-alt text-gray-500">เบอร์ติดต่อหลัก (สามารถเว้นว่างได้)</span>
+        </label>
+      </div>
+      
+      {# ที่อยู่ #}
+      <div class="form-control mb-6">
+        <label class="label">
+          <span class="label-text font-semibold">ที่อยู่</span>
+        </label>
+        <textarea name="address" 
+                  id="address"
+                  class="textarea textarea-bordered w-full" 
+                  rows="4"
+                  placeholder="ที่อยู่เต็ม เช่น 123 ถ.พระราม4 แขวงทุ่งมหาเมฆ เขตสาทร กรุงเทพฯ 10120"></textarea>
+        <label class="label">
+          <span class="label-text-alt text-gray-500">ที่อยู่สำหรับจัดส่งเอกสารและติดต่อ (สามารถเว้นว่างได้)</span>
+        </label>
+      </div>
+      
+      {# ปุ่ม #}
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">❌ ยกเลิก</button>
+        <button type="submit" class="btn btn-primary">💾 บันทึก</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<script>
+// เปิด Modal เพิ่มใหม่
+function openAddModal() {
+  const modal = document.getElementById('supplierModal');
+  const form = document.getElementById('supplierForm');
+  const title = document.getElementById('modalTitle');
+  
+  // รีเซ็ตฟอร์ม
+  form.reset();
+  form.action = "{% url 'supplier_create' %}";
+  title.textContent = '➕ เพิ่มซัพพลายเออร์ใหม่';
+  
+  modal.showModal();
+}
+
+// เปิด Modal แก้ไข
+function openEditModal(id, name, phone, address) {
+  const modal = document.getElementById('supplierModal');
+  const form = document.getElementById('supplierForm');
+  const title = document.getElementById('modalTitle');
+  
+  // ใส่ข้อมูลเดิม
+  document.getElementById('name').value = name;
+  document.getElementById('phone').value = phone;
+  document.getElementById('address').value = address;
+  
+  // เปลี่ยน Action
+  form.action = `/products/suppliers/${id}/edit/`;
+  title.textContent = '✏️ แก้ไขซัพพลายเออร์';
+  
+  modal.showModal();
+}
+
+// ปิด Modal
+function closeModal() {
+  const modal = document.getElementById('supplierModal');
+  modal.close();
+}
+</script>
+
+</body>
+</html>

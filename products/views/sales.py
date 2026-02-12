@@ -1,27 +1,23 @@
-"""
-Views: Sales (ขายสินค้า)
-รองรับ: Smart Search, ราคาขายส่ง/ปลีก, Payment Methods
-(Clean Version: สำหรับขายอย่างเดียว ตัดส่วนคืนสินค้าออกแล้ว)
-"""
-
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.db.models import Q, F, Sum, Count
-from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from decimal import Decimal
 from datetime import datetime
 import json
 from django.urls import reverse
 from django.views.decorators.clickjacking import xframe_options_exempt
-
-from products.models import (Product, Sale, SaleItem)
+# Models
+from products.models import Product, Transaction, SystemSetting
+from products.Services.product_service import ProductService
+# Services
+from products.Services.payment_service import PaymentService
+from django.conf import settings
+from products.Services.payment_service import generate_promptpay_qr
 from products.Services.sale_service import (
     create_sale_transaction, 
     post_sale, 
     cancel_sale as service_cancel_sale,
-    create_payment
 )
 
 
@@ -34,8 +30,22 @@ def sales(request):
     today = datetime.now()
     doc_prefix = f"SALE-{today.strftime('%Y%m%d')}"
     
-    today_sales_count = Sale.objects.filter(doc_no__startswith=doc_prefix).count()
-    next_number = str(today_sales_count + 1).zfill(4)
+    # ✅ แก้ไข Logic 1: หาเลขท้ายสุด + 1 (ปลอดภัยกว่าการนับ count)
+    last_sale = Transaction.objects.filter(
+        doc_no__startswith=doc_prefix, 
+        doc_type='SALE'
+    ).order_by('doc_no').last()
+
+    if last_sale:
+        try:
+            # ตัดเอา 4 ตัวท้ายมาบวก 1
+            last_run_no = int(last_sale.doc_no.split('-')[-1])
+            next_number = str(last_run_no + 1).zfill(4)
+        except ValueError:
+            next_number = '0001'
+    else:
+        next_number = '0001'
+
     doc_no = f"{doc_prefix}-{next_number}"
     
     context = {'doc_no': doc_no, 'today': today}
@@ -58,7 +68,7 @@ def search_products_ajax(request):
     # Priority: SKU ตรง → SKU คล้าย → ชื่อ → รุ่นรถ
     exact_sku = list(Product.objects.filter(sku__iexact=query, is_active=True).select_related('category')[:5])
     excluded_ids = [p.id for p in exact_sku]
-    
+
     similar_sku = list(Product.objects.filter(sku__icontains=query, is_active=True).exclude(id__in=excluded_ids).select_related('category')[:10])
     excluded_ids.extend([p.id for p in similar_sku])
     
@@ -73,14 +83,22 @@ def search_products_ajax(request):
     # สร้าง JSON
     results = []
     for p in products:
-        # สต็อก = หน่วยตรงๆ
-        stock_qty = p.quantity if p.quantity else 0
+        stock_status = ProductService.get_stock_status(p)
+        stock_qty = stock_status['quantity']
         
-        # ระบุ Match Type
         match_type = 'sku'
         if p in exact_sku: match_type = 'exact_sku'
         elif p in name_products: match_type = 'name'
         elif p in car_products: match_type = 'car'
+        
+        # หาสินค้าคู่/ชุด (ถ้ามี)
+        pair_products = []
+        if p.bundle_group:
+            siblings = Product.objects.filter(
+                bundle_group=p.bundle_group,
+                is_active=True
+            ).exclude(id=p.id).values('id', 'sku', 'name', 'quantity', 'selling_price')
+            pair_products = list(siblings)
         
         results.append({
             'id': p.id,
@@ -95,24 +113,60 @@ def search_products_ajax(request):
             'stock_units': float(stock_qty),
             'has_stock': stock_qty > 0,
             'match_type': match_type,
+            'bundle_type': p.bundle_type,
+            'bundle_group': p.bundle_group,
+            'has_pair': len(pair_products) > 0,
+            'pair_products': pair_products,
         })
-    
+
     return JsonResponse({
         'products': results,
         'count': len(results)
     })
 
-
 # ===================================
-# 3. บันทึกบิลขาย (AJAX) - (Clean: ตัดส่วนรับคืนออกแล้ว)
+# 2.1 หาสินค้าคู่/ชุด (AJAX)
+# ===================================
+@login_required
+@require_http_methods(["GET"])
+def get_pair_products(request):
+    product_id = request.GET.get('product_id')
+    
+    if not product_id:
+        return JsonResponse({'success': False, 'error': 'Missing product_id'}, status=400)
+    
+    try:
+        product = Product.objects.get(id=product_id, is_active=True)
+    except Product.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Product not found'}, status=404)
+    
+    if not product.bundle_group:
+        return JsonResponse({'success': True, 'has_pair': False, 'pairs': []})
+    
+    pairs = Product.objects.filter(
+        bundle_group=product.bundle_group,
+        is_active=True
+    ).exclude(id=product.id).values(
+        'id', 'sku', 'name', 'selling_price', 
+        'wholesale_price', 'quantity', 'unit'
+    )
+    
+    pairs_list = list(pairs)
+    
+    return JsonResponse({
+        'success': True,
+        'has_pair': len(pairs_list) > 0,
+        'bundle_group': product.bundle_group,
+        'bundle_type': product.bundle_type,
+        'pairs': pairs_list
+    })
+    
+# ===================================
+# 3. บันทึกบิลขาย (AJAX)
 # ===================================
 @login_required
 @require_http_methods(["POST"])
 def create_sale(request):
-    """
-    บันทึกบิลขาย (SALE Only)
-    รองรับการ "พักบิล" (HOLD) โดยการรับสถานะและไม่ตัดสต็อก
-    """
     try:
         data = json.loads(request.body)
         sale_id = data.get('sale_id')
@@ -123,35 +177,39 @@ def create_sale(request):
         price_type = data.get('price_type', 'retail')
         payment_method = data.get('payment_method', 'cash')
         
-        # ✅ 1. แปลงค่าเงินเป็น Decimal ให้ปลอดภัย
         try:
-            # ใช้ 0 ถ้าไม่มีค่าส่งมา
             payment_received = Decimal(str(data.get('payment_received', 0) or 0))
         except:
             payment_received = Decimal('0.00')
 
-        # payment_change ไม่ต้องรับจาก Frontend เราจะคำนวณเอง
-        
         try:
             discount_amount = Decimal(str(data.get('discount_amount', 0) or 0))
         except:
             discount_amount = Decimal('0.00')
             
         remark = data.get('remark', '')
-        
-        # ✅ รับค่า Config และ Status
         auto_post = data.get('auto_post', True)
         status = data.get('status', 'DRAFT') 
         
         if not items:
             return JsonResponse({'success': False, 'error': 'ไม่มีรายการสินค้า'}, status=400)
         
-        # เช็คเลขที่ซ้ำ (เฉพาะสร้างใหม่)
-        if doc_no and not sale_id and Sale.objects.filter(doc_no=doc_no).exists():
-            return JsonResponse({'success': False, 'error': f'เลขที่บิล {doc_no} มีอยู่แล้ว'}, status=400)
+        # ✅ Auto-Fix เลขที่บิลซ้ำ (กันตาย)
+        if doc_no and not sale_id and Transaction.objects.filter(doc_no=doc_no).exists():
+            today = datetime.now()
+            doc_prefix = f"SALE-{today.strftime('%Y%m%d')}"
+            last_sale = Transaction.objects.filter(doc_no__startswith=doc_prefix).order_by('doc_no').last()
+            if last_sale:
+                try:
+                    new_run_no = int(last_sale.doc_no.split('-')[-1]) + 1
+                    doc_no = f"{doc_prefix}-{str(new_run_no).zfill(4)}"
+                except:
+                    import uuid
+                    doc_no = f"{doc_prefix}-{str(uuid.uuid4())[:4]}"
+            else:
+                doc_no = f"{doc_prefix}-0001"
         
-        # ✅ 2. เรียกใช้ Service: สร้างบิลและรายการสินค้า
-        # เพื่อให้ได้ยอด grand_total ที่ถูกต้องจากการคำนวณใน model
+        # สร้างบิล (เรียก SaleService)
         sale = create_sale_transaction(
             user=request.user,
             sale_id=sale_id,
@@ -161,85 +219,49 @@ def create_sale(request):
             remark=remark,
             doc_no=doc_no,
             doc_type='SALE',
-            status=status 
+            status='DRAFT' 
         )
         
-        # ✅ 3. ตรวจสอบและคำนวณยอดเงิน (เฉพาะสถานะที่จะจบการขาย ไม่ใช่ HOLD)
         payment_change = Decimal('0.00')
         
-        if status != 'HOLD':
+        # ✅ เช็คเงินก่อน (ก่อนตัดสต็อก)
+        if status != 'HOLD' and auto_post:
             if payment_method == 'cash':
-                # ตรวจสอบยอดเงินรับ
                 if payment_received < sale.grand_total:
-                    # ถ้ายอดเงินไม่พอ ต้องยกเลิกบิลที่เพิ่งสร้างและแจ้งเตือน
-                    # หมายเหตุ: ในทางปฏิบัติอาจจะแค่ไม่บันทึก Payment หรือแจ้ง Error เลย
-                    # แต่เนื่องจาก sale สร้างไปแล้วใน transaction นี้ ถ้า error ตรงนี้ transaction ทั้งหมดใน view นี้น่าจะ rollback ไม่ได้อัตโนมัติถ้าไม่ได้ใส่ atomic ไว้ที่ view
-                    # ดังนั้นเราลบบิลทิ้งเลยจะง่ายกว่า
-                    sale.delete() 
+                    sale.delete()
                     return JsonResponse({
-                        'success': False, 
+                        'success': False,
                         'error': f'ยอดเงินที่รับมาไม่เพียงพอ (ขาด {sale.grand_total - payment_received:,.2f} บาท)'
                     }, status=400)
-                
-                # คำนวณเงินทอน
                 payment_change = payment_received - sale.grand_total
             else:
-                # กรณี QR/Transfer ถือว่ารับยอดเท่ากับยอดขายเสมอ
                 payment_received = sale.grand_total
+            
+            # ✅ เงินพอแล้ว → ค่อยตัดสต็อก
+            post_sale(sale)
         
-        # ✅ 4. บันทึก Payment
-        # บันทึก Note เงินทอนลงไปด้วยเพื่อความชัดเจน
+        # บันทึก Payment
         payment_note = f"เงินทอน: {payment_change:,.2f}" if payment_method == 'cash' and status != 'HOLD' else ""
         
-        create_payment(
+        PaymentService.create_payment(
             sale=sale,
             method=payment_method,
             received=payment_received,
             note=payment_note
         )
         
-        # ✅ 5. เงื่อนไขการตัดสต็อก (Post)
-        if auto_post and status == 'POSTED': # ตรวจสอบ status ที่ส่งมาว่าเป็น POSTED หรือไม่ (จาก frontend มักจะส่ง DRAFT มาถ้ายังไม่จบ แต่ถ้ากดจบการขายควรส่ง POSTED หรือ flag อะไรสักอย่าง)
-             # *แก้ไข*: โค้ดเดิมใช้ `if auto_post and status != 'HOLD':` ซึ่งโอเคแล้วถ้า logic คือ "ถ้าไม่พักบิล คือจบขาย"
-             # แต่ต้องระวัง status เริ่มต้นที่ส่งมา create_sale_transaction ถ้าเป็น DRAFT แต่เราอยาก POST เลย
-             # ใน create_sale_transaction รับ status ไปบันทึก
-             # ดังนั้นถ้าจะ Post ต้องมั่นใจว่า sale.status ถูกเปลี่ยนเป็น POSTED หรือ service post_sale จะเปลี่ยนให้
-             
-             # เรียก post_sale เพื่อตัดสต็อกและเปลี่ยนสถานะเป็น POSTED
-             post_sale(sale)
-        
         return JsonResponse({
             'success': True,
             'sale_id': sale.id,
             'doc_no': sale.doc_no,
             'grand_total': float(sale.grand_total),
-            'payment_change': float(payment_change), # ส่งเงินทอนกลับไป Frontend
+            'payment_change': float(payment_change),
             'status': sale.status,
             'redirect_url': reverse('print_receipt', kwargs={'sale_id': sale.id})
         })
         
-    except ValueError as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
-        
     except Exception as e:
-        # ลบบิลทิ้งกรณีเกิด error อื่นๆ หลังสร้างบิลไปแล้วแต่ยังไม่จบ
-        # if 'sale' in locals(): sale.delete() 
         return JsonResponse({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}, status=500)
-
-# ===================================
-# 4. รายละเอียดบิล
-# ===================================
-@login_required
-def sale_detail(request, sale_id):
-    """ดูรายละเอียดบิล"""
-    sale = get_object_or_404(Sale, id=sale_id)
-    items = sale.items.select_related('product', 'product__category')
-    
-    context = {
-        'sale': sale,
-        'items': items,
-    }
-    return render(request, 'products/sales/sale_detail.html', context)
 
 
 # ===================================
@@ -248,11 +270,11 @@ def sale_detail(request, sale_id):
 @login_required
 @xframe_options_exempt
 def print_receipt(request, sale_id):
-    """พิมพ์ใบเสร็จ"""
-    sale = get_object_or_404(Sale, id=sale_id)
+
+    
+    sale = get_object_or_404(Transaction, id=sale_id, doc_type='SALE')
     items = sale.items.select_related('product')
     
-    # เช็คว่ามี Payment หรือไม่
     payment_method_display = ''
     if hasattr(sale, 'payment') and sale.payment:
         payment_method_map = {
@@ -261,7 +283,10 @@ def print_receipt(request, sale_id):
             'transfer': '🏦 โอนเงิน',
         }
         payment_method_display = payment_method_map.get(sale.payment.method, sale.payment.method)
-        
+    
+    # ✅ ดึง settings
+    settings = SystemSetting.get_all()
+    
     is_from_report = request.GET.get('source') == 'report'
     
     context = {
@@ -270,90 +295,16 @@ def print_receipt(request, sale_id):
         'payment_method_display': payment_method_display,
         'print_date': datetime.now(),
         'is_from_report': is_from_report,
+        'settings': settings,  # ✅ ส่ง settings ไปให้ template
     }
     return render(request, 'products/sales/receipt.html', context)
-
-
-# ===================================
-# 6. ยกเลิกบิล
-# ===================================
-@login_required
-@require_http_methods(["POST"])
-def cancel_sale(request, sale_id):
-    """ยกเลิกบิลขาย - คืนสต็อก"""
-    try:
-        sale = get_object_or_404(Sale, id=sale_id)
-        
-        # เรียกใช้ Service: ยกเลิกบิล
-        service_cancel_sale(sale)
-        
-        return JsonResponse({'success': True, 'message': 'ยกเลิกบิลสำเร็จ'})
-        
-    except ValueError as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-# ===================================
-# 7. รายการบิลขายทั้งหมด
-# ===================================
-@login_required
-def sale_list(request):
-    """รายการบิลขายทั้งหมด พร้อมค้นหาและกรอง"""
-    
-    status = request.GET.get('status', '')
-    payment_method = request.GET.get('payment_method', '')
-    date_from = request.GET.get('date_from', '')
-    date_to = request.GET.get('date_to', '')
-    search = request.GET.get('search', '')
-    
-    sales = Sale.objects.select_related('created_by', 'payment')
-    
-    if status: sales = sales.filter(status=status)
-    if payment_method: sales = sales.filter(payment__method=payment_method)
-    if date_from: sales = sales.filter(sale_date__date__gte=date_from)
-    if date_to: sales = sales.filter(sale_date__date__lte=date_to)
-    
-    if search:
-        sales = sales.filter(
-            Q(doc_no__icontains=search) |
-            Q(remark__icontains=search)
-        )
-    
-    sales = sales.order_by('-sale_date', '-id')[:100]
-    
-    summary = Sale.objects.filter(status='POSTED').aggregate(
-        total_sales=Sum('grand_total'),
-        count=Count('id')
-    )
-    
-    payment_summary = Sale.objects.filter(status='POSTED').values('payment__method').annotate(
-        total=Sum('grand_total'),
-        count=Count('id')
-    ).order_by('-total')
-    
-    context = {
-        'sales': sales,
-        'summary': summary,
-        'payment_summary': payment_summary,
-        'status': status,
-        'payment_method': payment_method,
-        'date_from': date_from,
-        'date_to': date_to,
-        'search': search,
-    }
-    return render(request, 'products/sales/sale_list.html', context)
 
 
 @login_required
 @require_http_methods(["POST"])
 def generate_qr_code(request):
-    """สร้าง QR Code PromptPay"""
     try:
-        from django.conf import settings
-        from products.Services.payment_service import generate_promptpay_qr
-        
+     
         data = json.loads(request.body)
         amount = data.get('amount')
         reference = data.get('reference', '')
@@ -361,7 +312,8 @@ def generate_qr_code(request):
         if not amount or float(amount) <= 0:
             return JsonResponse({'success': False, 'error': 'ยอดเงินไม่ถูกต้อง'}, status=400)
         
-        PROMPTPAY_NUMBER = getattr(settings, 'PROMPTPAY_PHONE', '0652577703')
+        # ✅ แก้ไข: ใช้เบอร์เดียวกันกับ payment_service.py
+        PROMPTPAY_NUMBER = getattr(settings, 'PROMPTPAY_PHONE', '0834755649')
         
         qr_image = generate_promptpay_qr(
             phone_number=PROMPTPAY_NUMBER,
@@ -377,9 +329,8 @@ def generate_qr_code(request):
 @login_required
 @require_http_methods(["GET"])
 def get_held_bills_api(request):
-    """ดึงรายการบิลที่พักไว้ (HOLD) ของผู้ใช้คนนี้"""
     try:
-        held_bills = Sale.objects.filter(
+        held_bills = Transaction.objects.filter(
             status='HOLD',
             created_by=request.user
         ).order_by('-updated_at')
@@ -399,15 +350,11 @@ def get_held_bills_api(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-# ===================================
-# 9. API: ดึงข้อมูลบิลกลับมาทำต่อ (Resume)
-# ===================================
 @login_required
 def get_sale_details_api(request, sale_id):
-    """ดึงข้อมูลบิลเพื่อเอามาใส่ตะกร้า"""
     try:
-        sale = Sale.objects.get(id=sale_id, status='HOLD')
-        
+        sale = Transaction.objects.get(id=sale_id, status='HOLD', doc_type='SALE')
+        stock_status = ProductService.get_stock_status(item.product)
         items = []
         for item in sale.items.all():
             items.append({
@@ -416,8 +363,8 @@ def get_sale_details_api(request, sale_id):
                 'name': item.product.name,
                 'price': float(item.unit_price),
                 'quantity': float(item.quantity),
-                'stock_units': float(item.product.quantity), 
-                'has_stock': item.product.quantity > 0,
+                'stock_units': float(stock_status['quantity']), 
+                'has_stock': stock_status['quantity'] > 0,
                 'compatible_models': item.product.compatible_models,
                 'unit': item.product.unit,
                 'original_price': float(item.product.selling_price),
@@ -434,25 +381,64 @@ def get_sale_details_api(request, sale_id):
                 'items': items
             }
         })
-    except Sale.DoesNotExist:
+    except Transaction.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'ไม่พบข้อมูลบิล'}, status=404)
     
-# ===================================
-# 10. API: ยกเลิกบิลที่พักไว้ (Discard Hold)
-# ===================================
 @login_required
 @require_http_methods(["POST"])
 def discard_held_bill(request, sale_id):
-    """ยกเลิกบิลที่พักไว้ (เปลี่ยนสถานะเป็น CANCELLED)"""
     try:
-        # หาบิลที่เป็น HOLD เท่านั้น (กันพลาดไปลบบิลจริง)
-        sale = get_object_or_404(Sale, id=sale_id, status='HOLD')
-        
-        # เปลี่ยนสถานะเป็นยกเลิก
+        sale = get_object_or_404(Transaction, id=sale_id, status='HOLD', doc_type='SALE')
         sale.status = 'CANCELLED'
         sale.save(update_fields=['status'])
-        
         return JsonResponse({'success': True, 'message': 'ยกเลิกรายการพักบิลแล้ว'})
-        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ===================================
+# 6. ยกเลิกบิล
+# ===================================
+@login_required
+@require_http_methods(["POST"])
+def cancel_sale(request, sale_id):
+    try:
+        sale = get_object_or_404(Transaction, id=sale_id, doc_type='SALE')
+        service_cancel_sale(sale)
+        return JsonResponse({'success': True, 'message': 'ยกเลิกบิลสำเร็จ'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+@login_required
+@require_http_methods(["GET"])
+def product_detail_api(request, product_id):
+    try:
+        product = Product.objects.get(id=product_id, is_active=True)
+        stock_status = ProductService.get_stock_status(product)
+        has_pair = False
+        if product.bundle_group:
+             has_pair = Product.objects.filter(
+                bundle_group=product.bundle_group,
+                is_active=True
+            ).exclude(id=product.id).exists()
+        return JsonResponse({
+            'success': True,
+            'id': product.id,
+            'sku': product.sku,
+            'name': product.name,
+            'category': product.category.name if product.category else '-',
+            'compatible_models': product.compatible_models or '',
+            'unit': product.unit,
+            'selling_price': float(product.selling_price),
+            'wholesale_price': float(product.wholesale_price),
+            'cost_price': float(product.cost_price),
+            'stock_units': float(stock_status['quantity']),
+            'has_stock': stock_status['quantity'] > 0,
+            'bundle_type': product.bundle_type,
+            'bundle_group': product.bundle_group,
+            'has_pair': has_pair,
+        })
+    except Product.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'ไม่พบสินค้า'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

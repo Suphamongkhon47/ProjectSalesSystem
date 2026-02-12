@@ -66,3 +66,17 @@ def abs_float_value(value):
         
     except (ValueError, TypeError, Exception):
         return 0.0
+    
+@register.filter(name='mul')
+def mul(value, arg):
+    """
+    คูณตัวเลข (Multiplication)
+    ตัวอย่าง: {{ quantity|mul:price }}
+    """
+    try:
+        if value is None or arg is None:
+            return 0
+        # แปลงเป็น Decimal เพื่อความแม่นยำทางบัญชี
+        return Decimal(str(value)) * Decimal(str(arg))
+    except (ValueError, TypeError, Exception):
+        return 0

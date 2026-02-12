@@ -1,303 +1,426 @@
-{% load tailwind_tags %}
-{% load humanize %}
+{% load static %}
 {% load custom_filters %}
-<!doctype html>
-<html lang="th" data-theme="light">
+<!DOCTYPE html>
+<html lang="th">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ใบลดหนี้: {{ sale.doc_no }}</title>
-  {% tailwind_css %}
-  <style>
-      @media print {
-          .no-print { display: none !important; }
-          body { background-color: white; }
-          .print-break { page-break-after: always; }
-      }
-      
-      /* Gradient Background */
-      .gradient-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      }
-      
-      /* Table Stripe */
-      .table-stripe tbody tr:nth-child(even) {
-          background-color: #f9fafb;
-      }
-  </style>
-</head>
-<body class="bg-gray-50">
-
-{# ========== Main Container ========== #}
-<div class="min-h-screen p-6">
-  <div class="max-w-5xl mx-auto">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบคืนสินค้า - {{ sale.doc_no }}</title>
     
-    {# ========== Header Card ========== #}
-    <div class="bg-white rounded-2xl shadow-xl overflow-hidden mb-6">
-      
-      {# Purple Gradient Header #}
-      <div class="gradient-header text-white p-6">
-        <div class="flex justify-between items-start">
-          <div>
-            <div class="flex items-center gap-3 mb-2">
-              <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <div>
-                <h1 class="text-3xl font-bold">ใบลดหนี้ / Debit Note</h1>
-                <p class="text-purple-200 text-sm mt-1">เอกสารรับคืนสินค้า</p>
-              </div>
-            </div>
-          </div>
-          
-          {# Status Badge #}
-          <div>
-            {% if sale.status == 'POSTED' %}
-              <div class="bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg">
-                ✓ ยืนยันแล้ว
-              </div>
-            {% elif sale.status == 'CANCELLED' %}
-              <div class="bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg">
-                ✕ ยกเลิก
-              </div>
-            {% else %}
-              <div class="bg-gray-400 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg">
-                📝 ร่าง
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      
-      {# Document Info Section #}
-      <div class="p-6 bg-gray-50 border-b">
-        <div class="grid md:grid-cols-3 gap-6">
-          
-          {# เลขที่เอกสาร #}
-          <div>
-            <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">เลขที่เอกสาร</label>
-            <div class="text-xl font-bold text-gray-900 font-mono">{{ sale.doc_no }}</div>
-          </div>
-          
-          {# วันที่ออกเอกสาร #}
-          <div>
-            <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">วันที่ออกเอกสาร</label>
-            <div class="text-lg font-semibold text-gray-900">{{ sale.sale_date|date:"d/m/Y" }}</div>
-            <div class="text-sm text-gray-500">{{ sale.sale_date|date:"H:i" }} น.</div>
-          </div>
-          
-          {# อ้างอิงบิลขาย #}
-          <div>
-            <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">อ้างอิงบิลขาย</label>
-            {% if sale.ref_doc_no %}
-              <div class="text-lg font-semibold text-blue-600 font-mono">{{ sale.ref_doc_no }}</div>
-            {% else %}
-              <div class="text-gray-400">-</div>
-            {% endif %}
-          </div>
-          
-        </div>
-      </div>
-      
-    </div>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    {# ========== 2-Column Layout ========== #}
-    <div class="grid md:grid-cols-3 gap-6 mb-6">
-      
-      {# Left: Additional Info - 2 columns #}
-      <div class="md:col-span-2">
-        <div class="bg-white rounded-xl shadow-lg p-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            ข้อมูลเพิ่มเติม
-          </h3>
-          
-          <div class="space-y-3">
-            <div class="flex items-center justify-between py-2 border-b">
-              <span class="text-gray-600">ผู้ออกเอกสาร:</span>
-              <span class="font-semibold text-gray-900">{{ sale.created_by.get_full_name|default:sale.created_by.username }}</span>
-            </div>
-            
-            <div class="flex items-center justify-between py-2 border-b">
-              <span class="text-gray-600">วิธีคืนเงิน:</span>
-              {% if sale.payment %}
-                {% if sale.payment.method == 'cash' %}
-                  <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">💵 เงินสด</span>
-                {% elif sale.payment.method == 'transfer' %}
-                  <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">🏦 โอนเงิน</span>
-                {% else %}
-                  <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-semibold">{{ sale.payment.method }}</span>
-                {% endif %}
-              {% else %}
-                <span class="text-gray-400">-</span>
-              {% endif %}
-            </div>
-            
-            {% if sale.remark %}
-            <div class="py-2">
-              <span class="text-gray-600 block mb-1">หมายเหตุ:</span>
-              <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
-                <p class="text-sm text-gray-700 italic">{{ sale.remark|linebreaksbr }}</p>
-              </div>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      
-      {# Right: Amount Summary - 1 column #}
-      <div class="md:col-span-1">
-        <div class="bg-gradient-to-br from-red-500 to-pink-600 rounded-xl shadow-2xl p-6 text-white">
-          <div class="text-center mb-2">
-            <svg class="w-12 h-12 mx-auto mb-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-            </svg>
-            <div class="text-sm uppercase tracking-wider opacity-90">ยอดเงินคืนรวม</div>
-          </div>
-          
-          <div class="text-center mb-4">
-            <div class="text-5xl font-bold">
-              {{ sale.grand_total|abs|floatformat:0|intcomma }}
-            </div>
-            <div class="text-xl opacity-90">บาท</div>
-          </div>
-          
-          <div class="border-t border-white/30 pt-3 text-sm text-center opacity-90">
-            จำนวนสินค้า: {{ sale.total_quantity|default:"-" }} ชิ้น
-          </div>
-        </div>
-      </div>
-      
-    </div>
+        body {
+            font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
 
-    {# ========== Items Table ========== #}
-    <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
-      <div class="bg-gradient-to-r from-gray-700 to-gray-900 text-white px-6 py-4">
-        <h3 class="text-lg font-bold flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          รายการสินค้าที่รับคืน
-        </h3>
-      </div>
-      
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead class="bg-gray-100 border-b-2 border-gray-300">
-            <tr>
-              <th class="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase w-12">#</th>
-              <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">รายการสินค้า</th>
-              <th class="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase w-28">ราคา/หน่วย</th>
-              <th class="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase w-24">จำนวนคืน</th>
-              <th class="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase w-32">รวมเงินคืน</th>
-            </tr>
-          </thead>
-          <tbody class="table-stripe">
-            {% for item in items %}
-            <tr class="border-b hover:bg-blue-50 transition-colors">
-              <td class="px-4 py-4 text-center text-gray-500 font-medium">{{ forloop.counter }}</td>
-              
-              <td class="px-4 py-4">
-                <div class="font-bold text-gray-900 text-base mb-1">{{ item.product.name }}</div>
-                <div class="text-xs text-gray-500 font-mono bg-gray-100 inline-block px-2 py-1 rounded">
-                  SKU: {{ item.product.sku }}
-                </div>
-              </td>
-              
-              <td class="px-4 py-4 text-right font-mono text-gray-700">
-                {{ item.unit_price|floatformat:2|intcomma }}
-              </td>
-              
-              <td class="px-4 py-4 text-center">
-                <div class="inline-flex items-center gap-1 bg-red-100 px-3 py-1 rounded-full">
-                  <span class="font-bold text-red-600 text-lg">{{ item.quantity|floatformat:0 }}</span>
-                  <span class="text-xs text-red-500">{{ item.product.unit }}</span>
-                </div>
-              </td>
-              
-              <td class="px-4 py-4 text-right font-bold text-red-600 font-mono text-lg">
-                {{ item.line_total|abs|floatformat:2|intcomma }}
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="5" class="px-4 py-12 text-center">
-                <div class="text-gray-400">
-                  <svg class="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                  <div class="text-lg">ไม่พบรายการสินค้า</div>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-          
-          {# Footer Total #}
-          <tfoot class="bg-gradient-to-r from-gray-800 to-gray-900 text-white">
-            <tr>
-              <td colspan="3" class="px-6 py-4 text-right text-base font-bold uppercase tracking-wider">
-                รวมทั้งสิ้น
-              </td>
-              <td class="px-4 py-4 text-center text-lg font-bold">
-                {{ sale.total_quantity|default:"-" }}
-              </td>
-              <td class="px-4 py-4 text-right text-2xl font-bold font-mono">
-                {{ sale.grand_total|abs|floatformat:2|intcomma }}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
+        /* ปุ่มด้านบน - ไม่พิมพ์ */
+        .no-print {
+            max-width: 800px;
+            margin: 0 auto 20px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
 
-    {# ========== Footer Actions ========== #}
-    <div class="flex justify-between items-center no-print">
-      <div class="text-sm text-gray-500">
-        <p>ออกเอกสารโดย: <span class="font-semibold text-gray-700">{{ request.user.username }}</span></p>
-        <p>เมื่อ: {% now "d/m/Y H:i:s" %}</p>
-      </div>
-      
-      <div class="flex gap-3">
-        {% if request.GET.source != 'modal' %}
-        <a href="{% url 'return_list' %}" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold transition-all shadow">
-          ← ย้อนกลับ
-        </a>
-        {% endif %}
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-back {
+            background-color: #6b7280;
+            color: white;
+        }
+
+        .btn-back:hover {
+            background-color: #4b5563;
+        }
+
+        .btn-print {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-print:hover {
+            background-color: #2563eb;
+        }
+
+        /* ใบคืนสินค้า */
+        .receipt {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .receipt-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .store-name {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
         
-        <button onclick="window.print()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all shadow-lg flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-          </svg>
-          พิมพ์เอกสาร
+        .store-contact, .store-address {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 4px 0;
+        }
+
+        .receipt-title {
+            font-size: 20px;
+            color: #6b7280;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        /* ข้อมูลบิล */
+        .receipt-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #4b5563;
+            min-width: 140px;
+        }
+
+        .info-value {
+            color: #1f2937;
+        }
+
+        /* รายการสินค้า */
+        .items-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .item {
+            padding: 15px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .item-number {
+            color: #6b7280;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .item-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            flex: 1;
+        }
+
+        .item-total {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .item-details {
+            display: flex;
+            justify-content: space-between;
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 4px;
+            padding-left: 30px;
+        }
+
+        .item-sku {
+            font-family: 'Courier New', monospace;
+        }
+
+        /* สรุปยอด */
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 16px;
+        }
+
+        .summary-row.subtotal {
+            color: #4b5563;
+        }
+
+        .summary-row.discount {
+            color: #059669;
+        }
+
+        .summary-row.total {
+            font-size: 24px;
+            font-weight: 700;
+            color: #059669;
+            padding-top: 15px;
+            margin-top: 10px;
+            border-top: 2px solid #d1d5db;
+        }
+
+        /* Payment Info */
+        .payment-section {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #eff6ff;
+            border-radius: 8px;
+            border: 2px solid #3b82f6;
+        }
+
+        .payment-method {
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+
+        .payment-details {
+            color: #4b5563;
+            font-size: 14px;
+        }
+
+        /* Footer */
+        .receipt-footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .thank-you {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .print-time {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .receipt {
+                box-shadow: none;
+                border-radius: 0;
+                max-width: 100%;
+                padding: 20px;
+            }
+
+            .item {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ปุ่มด้านบน (ไม่พิมพ์) -->
+    <div class="no-print">
+        <a href="{% url 'return_list' %}" class="btn btn-back">
+            ← กลับรายการคืนสินค้า
+        </a>
+        <button onclick="window.print()" class="btn btn-print">
+            🖨️ พิมพ์ใบคืนสินค้า
         </button>
-      </div>
     </div>
 
-    {# ========== Print Footer (แสดงเฉพาะตอนพิมพ์) ========== #}
-    <div class="hidden print:block mt-12 pt-6 border-t-2 border-gray-300">
-      <div class="grid grid-cols-2 gap-8 text-center text-sm">
-        <div>
-          <div class="mb-16 border-b border-gray-400 pb-1"></div>
-          <div class="font-semibold">ผู้รับคืนสินค้า</div>
-          <div class="text-gray-600">( {{ sale.created_by.username }} )</div>
+    <!-- ใบคืนสินค้า -->
+    <div class="receipt">
+        
+        <!-- Header -->
+        <div class="receipt-header">
+            <div class="store-name">🏪 {{ settings.store_name|default:"ร้านขายอะไหล่ยนต์" }}</div>
+            {% if settings.store_phone %}
+            <div class="store-contact">📞 {{ settings.store_phone }}</div>
+            {% endif %}
+            {% if settings.store_address %}
+            <div class="store-address">📍 {{ settings.store_address }}</div>
+            {% endif %}
+            <div class="receipt-title">ใบคืนสินค้า / ใบลดหนี้</div>
         </div>
-        <div>
-          <div class="mb-16 border-b border-gray-400 pb-1"></div>
-          <div class="font-semibold">ผู้ตรวจสอบ</div>
-          <div class="text-gray-600">( ........................... )</div>
-        </div>
-      </div>
-      
-      <div class="text-center text-xs text-gray-500 mt-6">
-        <p>เอกสารนี้พิมพ์จากระบบ POS เมื่อ {% now "d/m/Y H:i:s" %} • หน้า 1/1</p>
-      </div>
-    </div>
 
-  </div>
-</div>
+        <!-- ข้อมูลบิล -->
+        <div class="receipt-info">
+            <div class="info-row">
+                <span class="info-label">เลขที่ใบคืนสินค้า:</span>
+                <span class="info-value">{{ sale.doc_no }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">วันที่:</span>
+                <span class="info-value">{{ sale.transaction_date|date:"d/m/Y H:i" }} น.</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">อ้างอิงบิลเดิม:</span>
+                <span class="info-value">{{ sale.ref_doc_no|default:"-" }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">พนักงานรับคืน:</span>
+                <span class="info-value">{{ sale.created_by.username }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">สถานะ:</span>
+                <span class="info-value">
+                    {% if sale.status == 'POSTED' %}
+                        ✅ ยืนยันแล้ว
+                    {% elif sale.status == 'DRAFT' %}
+                        📝 ฉบับร่าง
+                    {% else %}
+                        ❌ ยกเลิก
+                    {% endif %}
+                </span>
+            </div>
+            {% if sale.remark %}
+            <div class="info-row" style="grid-column: 1 / -1;">
+                <span class="info-label">หมายเหตุ:</span>
+                <span class="info-value">{{ sale.remark }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- รายการสินค้า -->
+        <div class="items-section">
+            <div class="section-title">รายการสินค้าที่คืน</div>
+            
+            {% for item in items %}
+            <div class="item">
+                <div class="item-header">
+                    <div style="display: flex; flex: 1; align-items: baseline;">
+                        <span class="item-number">{{ forloop.counter }}.</span>
+                        
+                        <span class="item-name">
+                            {% if item.unit_type == 'คู่' or item.unit_type == 'ชุด' %}
+                                {{ item.product.base_name|default:item.product.name }}
+                            {% else %}
+                                {{ item.product.name }}
+                            {% endif %}
+
+                            {% if item.unit_type == 'คู่' %}
+                                <span style="background: #3b82f6; color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; vertical-align: middle;">คู่</span>
+                            {% elif item.unit_type == 'ชุด' %}
+                                <span style="background: #8b5cf6; color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; vertical-align: middle;">ชุด</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <span class="item-total">{{ item.line_total|floatformat:2 }} ฿</span>
+                </div>
+                
+                <div class="item-details">
+                    <span class="item-sku">SKU: {{ item.display_sku|default:item.product.sku }}</span>
+                    <span>{{ item.quantity|floatformat:0 }} {{ item.unit_type|default:item.product.unit }} x {{ item.unit_price|floatformat:2 }} ฿</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- สรุปยอด -->
+        <div class="summary">
+            <div class="summary-row subtotal">
+                <span>ยอดรวมสินค้าคืน:</span>
+                <span>{{ sale.total_amount|abs|floatformat:2 }} ฿</span>
+            </div>
+            
+            {% if sale.discount_amount > 0 %}
+            <div class="summary-row discount">
+                <span>ส่วนลดที่คืน:</span>
+                <span>{{ sale.discount_amount|floatformat:2 }} ฿</span>
+            </div>
+            {% endif %}
+            
+            <div class="summary-row total">
+                <span>ยอดคืนเงินทั้งสิ้น:</span>
+                <span>{{ sale.grand_total|abs|floatformat:2 }} ฿</span>
+            </div>
+        </div>
+
+        <!-- ข้อมูลการคืนเงิน -->
+        {% if sale.payment %}
+        <div class="payment-section">
+            <div class="payment-method">
+                <span>วิธีคืนเงิน:</span>
+                <span>{{ payment_method_display }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="receipt-footer">
+            <div class="thank-you">{{ settings.receipt_footer|default:"ขอบคุณที่ใช้บริการ" }}</div>
+            <div class="print-time">พิมพ์เมื่อ: {{ print_date|date:"d/m/Y H:i:s" }}</div>
+        </div>
+
+    </div>
 
 </body>
 </html>

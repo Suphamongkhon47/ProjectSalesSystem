@@ -1,8 +1,3 @@
-"""
-Views: Return (รับคืนสินค้า)
-รองรับ: ค้นหาบิล, เลือกสินค้าคืน, บันทึกเหตุผล, คืนเงิน
-"""
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -14,12 +9,12 @@ import json
 from django.core.paginator import Paginator
 
 from products.Services.payment_service import PaymentService
-from products.models import Sale, SaleItem, Product, Supplier # เพิ่ม model ที่ต้องใช้
+from products.models import Transaction, TransactionItem, Product, Supplier 
 from products.Services.return_service import (
     create_return_transaction,
     post_return,
     validate_return_eligibility,
-    cancel_return as service_cancel_return # import เพิ่ม
+    cancel_return as service_cancel_return 
 )
 
 
@@ -34,7 +29,7 @@ def returns(request):
     doc_prefix = f"RET-{today.strftime('%Y%m%d')}"
     
     # นับบิลรับคืนวันนี้
-    today_returns_count = Sale.objects.filter(
+    today_returns_count = Transaction.objects.filter(
         doc_no__startswith=doc_prefix,
         doc_type='RETURN'
     ).count()
@@ -58,120 +53,94 @@ def returns(request):
 def search_sale_for_return(request):
     """
     ค้นหาบิลเดิมสำหรับรับคืน
-    รองรับ: เลขบิล, เบอร์โทร, ทะเบียนรถ
     """
-    
     query = request.GET.get('q', '').strip()
     
     if len(query) < 3:
-        return JsonResponse({
-            'success': False,
-            'error': 'กรุณากรอกอย่างน้อย 3 ตัวอักษร'
-        }, status=400)
+        return JsonResponse({'success': False, 'error': 'กรุณากรอกอย่างน้อย 3 ตัวอักษร'}, status=400)
     
     try:
-        # Priority 1: ค้นหาเลขบิล (SALE-xxx)
-        sale = Sale.objects.filter(
+        # -------------------------------------------------------
+        # ✅ จุดที่แก้ไข: ลบ 'payment' ออกจาก select_related
+        # -------------------------------------------------------
+        sale = Transaction.objects.filter(
             doc_no__icontains=query,
             doc_type='SALE',
-            status='POSTED'
-        ).select_related('created_by', 'payment').first()
-        
-        # Priority 2: ค้นหาเบอร์โทร (ถ้ามี customer_phone field)
-        # if not sale and hasattr(Sale, 'customer_phone'):
-        #     sale = Sale.objects.filter(
-        #         customer_phone=query,
-        #         doc_type='SALE',
-        #         status='POSTED'
-        #     ).select_related('created_by', 'payment').order_by('-sale_date').first()
-        
-        # Priority 3: ค้นหาทะเบียนรถ (ถ้ามี car_plate field)
-        # if not sale and hasattr(Sale, 'car_plate'):
-        #     sale = Sale.objects.filter(
-        #         car_plate__icontains=query,
-        #         doc_type='SALE',
-        #         status='POSTED'
-        #     ).select_related('created_by', 'payment').order_by('-sale_date').first()
+            status='POSTED' # ⚠️ ต้องมั่นใจว่าบิลเป็นสถานะนี้
+        ).select_related('created_by').first() # เหลือแค่ created_by พอ
         
         if not sale:
-            return JsonResponse({
-                'success': False,
-                'error': 'ไม่พบบิลที่ค้นหา'
-            }, status=404)
+            return JsonResponse({'success': False, 'error': 'ไม่พบบิลที่ค้นหา (หรือสถานะไม่ใช่ "ขายแล้ว")'}, status=404)
         
-        # ✅ Validate: ตรวจสอบความพร้อมในการคืน
+        # ตรวจสอบความพร้อมในการคืน (ถ้ามีฟังก์ชันนี้)
         try:
             validate_return_eligibility(sale)
         except ValueError as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
         
         # ดึงรายการสินค้า
         items = sale.items.select_related('product', 'product__category').all()
         
-        # คำนวณจำนวนที่คืนไปแล้ว
+        # ... (ส่วนคำนวณจำนวนคืน history คงเดิม) ...
         returned_items = {}
-        returns = Sale.objects.filter(
-            doc_type='RETURN',
-            ref_doc_no=sale.doc_no,
-            status='POSTED'
-        )
-        
-        for ret in returns:
+        returns_history = Transaction.objects.filter(doc_type='RETURN', ref_doc_no=sale.doc_no, status='POSTED')
+        for ret in returns_history:
             for ret_item in ret.items.all():
-                product_id = ret_item.product_id
-                returned_items[product_id] = returned_items.get(product_id, 0) + ret_item.quantity
-        
-        # สร้าง JSON รายการสินค้า
+                returned_items[ret_item.product_id] = returned_items.get(ret_item.product_id, 0) + ret_item.quantity
+
         items_data = []
         for item in items:
-            # จำนวนที่คืนไปแล้ว
             already_returned = returned_items.get(item.product_id, 0)
-            # จำนวนที่เหลือให้คืนได้
             remaining = item.quantity - already_returned
             
             if remaining > 0:
+                # ⭐ ใช้ข้อมูลจาก TransactionItem
+                display_sku = item.display_sku or item.product.sku
+                display_name = item.product.name
+                
+                # ⭐ ถ้าขายเป็นคู่/ชุด → ใช้ base_name
+                if item.unit_type in ['คู่', 'ชุด']:
+                    display_name = item.product.base_name or item.product.name
+                
                 items_data.append({
                     'id': item.id,
                     'product_id': item.product.id,
-                    'sku': item.product.sku,
-                    'name': item.product.name,
-                    'category': item.product.category.name if item.product.category else '-',
-                    'compatible_models': item.product.compatible_models or '',
-                    'unit': item.product.unit,
+                    'sku': display_sku,  # ✅ MIR-VIOS
+                    'name': display_name,  # ✅ กระจก
+                    'unit': item.unit_type or item.product.unit,  # ✅ คู่
                     'original_quantity': float(item.quantity),
                     'already_returned': float(already_returned),
                     'remaining_quantity': float(remaining),
-                    'unit_price': float(item.unit_price),
+                    'unit_price': float(item.unit_price),  # ✅ 1000
                     'cost_price': float(item.cost_price),
+                    'unit_type': item.unit_type or 'ชิ้น',  # ⭐ เพิ่ม
+                    'bundle_items': item.bundle_items  # ⭐ เพิ่ม
                 })
         
+        # ดึง Payment Method อย่างปลอดภัย
+        payment_method = 'ไม่ระบุ'
+        if hasattr(sale, 'payment'):
+            payment_method = sale.payment.method
+
         # ข้อมูลบิล
-        sale_data = {
+        transaction_data = {
             'id': sale.id,
             'doc_no': sale.doc_no,
-            'sale_date': sale.sale_date.strftime('%d/%m/%Y %H:%M'),
-            'total_amount': float(sale.total_amount),
-            'discount_amount': float(sale.discount_amount),
+            # ✅ ใช้ TransactionItem_date ให้ตรง Model
+            'sale_date': sale.transaction_date.strftime('%d/%m/%Y %H:%M'), 
             'grand_total': float(sale.grand_total),
             'created_by': sale.created_by.get_full_name() or sale.created_by.username,
-            'payment_method': sale.payment.method if hasattr(sale, 'payment') else None,
+            'payment_method': payment_method,
             'items': items_data,
-            'items_count': len(items_data),
         }
         
         return JsonResponse({
             'success': True,
-            'sale': sale_data
+            'sale': transaction_data 
         })
         
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'เกิดข้อผิดพลาด: {str(e)}'
-        }, status=500)
+        return JsonResponse({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}, status=500)
 
 
 # ===================================
@@ -182,15 +151,6 @@ def search_sale_for_return(request):
 def create_return(request):
     """
     บันทึกบิลรับคืนสินค้า
-    
-    รับข้อมูล:
-    - doc_no: เลขที่บิลรับคืน
-    - ref_doc_no: เลขที่บิลเดิม
-    - items: รายการสินค้าที่คืน [{product_id, quantity}, ...]
-    - return_reason: เหตุผล
-    - return_note: หมายเหตุ
-    - refund_method: วิธีคืนเงิน
-    - discount_return: ส่วนลดที่คืน
     """
     
     try:
@@ -200,47 +160,39 @@ def create_return(request):
         ref_doc_no = data.get('ref_doc_no')
         items = data.get('items', [])
         
-        # ข้อมูลเหตุผล
         return_reason = data.get('return_reason', 'other')
         return_note = data.get('return_note', '')
         
-        # ข้อมูลการคืนเงิน
         refund_method = data.get('refund_method', 'cash')
         refund_bank = data.get('refund_bank', '')
         refund_account = data.get('refund_account', '')
         refund_name = data.get('refund_name', '')
         
-        # ส่วนลด
         discount_return = Decimal(str(data.get('discount_return', 0)))
         
-        # Validate
         if not ref_doc_no:
             return JsonResponse({'success': False, 'error': 'ไม่พบเลขที่บิลเดิม'}, status=400)
         
         if not items:
             return JsonResponse({'success': False, 'error': 'ไม่มีรายการสินค้าที่คืน'}, status=400)
         
-        # ✅ เช็คเลขที่ซ้ำ (ถ้าระบบไม่ได้ Auto Gen ให้ใหม่ใน JS)
-        if Sale.objects.filter(doc_no=doc_no).exists():
-             # สร้างเลขใหม่ถ้าซ้ำ
+        if Transaction.objects.filter(doc_no=doc_no).exists():
              today_str = datetime.now().strftime('%Y%m%d')
              prefix = f"RET-{today_str}"
-             last = Sale.objects.filter(doc_no__startswith=prefix).count()
+             last = Transaction.objects.filter(doc_no__startswith=prefix).count()
              doc_no = f"{prefix}-{str(last + 1).zfill(4)}"
         
-        # ✅ ค้นหาบิลเดิม
-        original_sale = get_object_or_404(
-            Sale,
+        original_transaction = get_object_or_404(
+            Transaction,
             doc_no=ref_doc_no,
             doc_type='SALE',
             status='POSTED'
         )
         
-        # ✅ Validate: ความพร้อมในการคืน
-        validate_return_eligibility(original_sale)
+        validate_return_eligibility(original_transaction)
         
-        # ✅ เรียก Service: สร้าง Return Transaction
-        return_sale = create_return_transaction(
+        # สร้าง Return Transaction
+        return_transaction = create_return_transaction(
             user=request.user,
             ref_doc_no=ref_doc_no,
             items_data=items,
@@ -250,34 +202,31 @@ def create_return(request):
             doc_no=doc_no
         )
         
-        # ✅ เรียก Service: สร้าง Payment (คืนเงิน)
-        # ยอดคืนเป็นลบ (เพราะคืนเงิน)
-        refund_amount = -abs(return_sale.grand_total)
+        refund_amount = -abs(return_transaction.grand_total)
         
+        # ✅ แก้ไข 4: เรียก PaymentService ด้วย transaction_obj= (ตามที่ตกลงกัน)
         PaymentService.create_payment(
-            sale=return_sale,
+            sale=return_transaction, # เปลี่ยนจาก sale= เป็น transaction_obj=
             method=refund_method,
             received=refund_amount,
             note=f"คืนเงิน: {return_reason}\n{return_note}"
         )
         
-        # ✅ ถ้าโอนเงิน บันทึกข้อมูลบัญชี
-        if refund_method == 'transfer' and hasattr(return_sale.payment, 'refund_bank'):
-            return_sale.payment.refund_bank = refund_bank
-            return_sale.payment.refund_account = refund_account
-            return_sale.payment.refund_name = refund_name
-            return_sale.payment.save()
+        if refund_method == 'transfer' and hasattr(return_transaction.payment, 'refund_bank'):
+            return_transaction.payment.refund_bank = refund_bank
+            return_transaction.payment.refund_account = refund_account
+            return_transaction.payment.refund_name = refund_name
+            return_transaction.payment.save()
         
-        # ✅ เรียก Service: ยืนยันบิลรับคืน (คืนสต็อก)
-        post_return(return_sale)
+        post_return(return_transaction)
         
         return JsonResponse({
             'success': True,
-            'sale_id': return_sale.id,
-            'doc_no': return_sale.doc_no,
-            'grand_total': float(return_sale.grand_total),
-            'status': return_sale.status,
-            'redirect_url': f'/sales/{return_sale.id}/print/?source=return'
+            'sale_id': return_transaction.id,
+            'doc_no': return_transaction.doc_no,
+            'grand_total': float(return_transaction.grand_total),
+            'status': return_transaction.status,
+            'redirect_url': f'/returns/{return_transaction.id}/'
         })
         
     except ValueError as e:
@@ -285,54 +234,4 @@ def create_return(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}, status=500)
-
-# ===================================
-# 6. ยกเลิกบิลรับคืน (ไม่แนะนำ!)
-# ===================================
-@login_required
-@require_http_methods(["POST"])
-def cancel_return(request, return_id):
-    """
-    ยกเลิกบิลรับคืน (ไม่แนะนำให้ใช้!)
-    """
-    
-    try:
-        return_sale = get_object_or_404(
-            Sale,
-            id=return_id,
-            doc_type='RETURN'
-        )
-        
-        if return_sale.status == 'CANCELLED':
-            return JsonResponse({
-                'success': True,
-                'message': 'บิลนี้ถูกยกเลิกแล้ว'
-            })
-        
-        if return_sale.status != 'POSTED':
-            return JsonResponse({
-                'success': False,
-                'error': 'สามารถยกเลิกได้เฉพาะบิลที่ยืนยันแล้ว'
-            }, status=400)
-        
-        # ⚠️ ยกเลิกบิลรับคืน = ตัดสต็อกอีกครั้ง
-        service_cancel_return(return_sale)
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'ยกเลิกบิลรับคืนสำเร็จ'
-        })
-        
-    except ValueError as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=400)
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'เกิดข้อผิดพลาด: {str(e)}'
-        }, status=500)
-
 

@@ -7,16 +7,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>รายละเอียดบิล {{ purchase.doc_no }}</title>
   {% tailwind_css %}
-  <style>
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; }
-    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-    @media print {
-      .no-print { display: none; }
-      .print-only { display: block; }
-    }
-    .print-only { display: none; }
-  </style>
 </head>
 <body class="bg-base-200">
 <div class="flex min-h-screen">
@@ -45,13 +35,6 @@
               </svg>
               กลับ
             </a>
-            {# ปุ่มพิมพ์ #}
-            <button onclick="window.print()" class="btn btn-primary gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              พิมพ์
-            </button>
             {# ปุ่มยกเลิก (แสดงเฉพาะ DRAFT) #}
             {% if purchase.status == 'DRAFT' %}
             <form method="post" action="{% url 'cancel_purchase' purchase.id %}" style="display:inline;">
@@ -207,14 +190,14 @@
                 <tr>
                   <td class="text-center font-bold">{{ forloop.counter }}</td>
                   <td>
-                    <span class="badge badge-neutral font-mono font-bold">{{ item.product.sku }}</span>
+                    <span class="badge badge-neutral font-mono font-bold whitespace-nowrap">{{ item.product.sku }}</span>
                   </td>
                   <td>
                     <div class="font-bold">{{ item.product.name }}</div>
                     <div class="text-xs text-gray-500 mt-1">{{ item.product.unit }}</div>
                   </td>
                   <td>
-                    <span class="badge badge-primary badge-sm">{{ item.product.category.name }}</span>
+                    <span class="badge badge-primary badge-sm whitespace-nowrap">{{ item.product.category.name }}</span>
                   </td>
                   <td>
                     <div class="text-sm">
@@ -291,7 +274,7 @@
                   <td class="font-mono text-xs badge badge-ghost">{{ item.product.sku }}</td>
                   <td>{{ item.product.name }}</td>
                   <td class="text-right">{{ item.quantity|floatformat:0 }} {{ item.product.unit }}</td>
-                  <td class="text-right">{{ item.product.pieces_per_unit|floatformat:0 }}</td>
+                  <td class="text-right">{{ item.product.pieces_per_unit|floatformat:0 }} ชิ้น/{{ item.product.purchase_unit_name|default:item.product.unit }}</td>
                   <td class="text-right">
                     <span class="badge badge-success font-bold">
                       +{{ item.actual_stock|floatformat:0 }} ชิ้น
@@ -342,12 +325,5 @@
     </div>
   </main>
 </div>
-
-{# ========== JavaScript ========== #}
-<script>
-  window.onafterprint = function() {
-    console.log('Print completed');
-  };
-</script>
 </body>
 </html>

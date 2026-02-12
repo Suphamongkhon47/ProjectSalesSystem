@@ -14,7 +14,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 
 # ✅ แก้ Circular Import: import เฉพาะที่จำเป็น
-from products.models import Sale, SaleItem, Product
+from products.models import Transaction, TransactionItem, Product
 
 
 # ===================================
@@ -62,12 +62,12 @@ def validate_return_eligibility(sale, max_days=7):
         )
     
     # Rule 3: ไม่เกินจำนวนวันที่กำหนด
-    days_passed = (timezone.now() - sale.sale_date).days
+    days_passed = (timezone.now() - sale.transaction_date).days
     
     if days_passed > max_days:
         raise ValueError(
             f"ไม่สามารถรับคืนได้\n"
-            f"บิลนี้ขายเมื่อ: {sale.sale_date.strftime('%d/%m/%Y')}\n"
+            f"บิลนี้ขายเมื่อ: {sale.transaction_date.strftime('%d/%m/%Y')}\n"
             f"ผ่านมาแล้ว: {days_passed} วัน\n"
             f"รับคืนได้ภายใน: {max_days} วัน"
         )
@@ -114,7 +114,7 @@ def get_returned_items_summary(ref_doc_no):
         dict: {product_id: total_returned_quantity}
     """
     
-    returns = Sale.objects.filter(
+    returns = Transaction.objects.filter(
         doc_type='RETURN',
         ref_doc_no=ref_doc_no,
         status='POSTED'
@@ -166,12 +166,12 @@ def create_return_transaction(
             
             # ✅ ค้นหาบิลเดิม
             try:
-                original_sale = Sale.objects.get(
+                original_sale = Transaction.objects.get(
                     doc_no=ref_doc_no,
                     doc_type='SALE',
                     status='POSTED'
                 )
-            except Sale.DoesNotExist:
+            except Transaction.DoesNotExist:
                 raise ValueError(f"ไม่พบบิลเลขที่: {ref_doc_no}")
             
             # ✅ Validate: เช็คความพร้อม
@@ -181,7 +181,7 @@ def create_return_transaction(
             already_returned = get_returned_items_summary(ref_doc_no)
             
             # ✅ สร้างบิลรับคืน
-            return_sale = Sale.objects.create(
+            return_sale = Transaction.objects.create(
                 doc_no=doc_no,
                 doc_type='RETURN',
                 ref_doc_no=ref_doc_no,
@@ -214,7 +214,7 @@ def create_return_transaction(
                 # ✅ ค้นหารายการในบิลเดิม
                 try:
                     original_item = original_sale.items.get(product=product)
-                except SaleItem.DoesNotExist:
+                except TransactionItem.DoesNotExist:
                     raise ValueError(
                         f"ไม่พบสินค้า {product.name} ในบิลเดิม"
                     )
@@ -235,13 +235,16 @@ def create_return_transaction(
                 # ✅ สร้างรายการคืน (ใช้ราคาและต้นทุนจากบิลเดิม)
                 line_total = return_qty * original_item.unit_price
                 
-                SaleItem.objects.create(
-                    sale=return_sale,
+                TransactionItem.objects.create(
+                    transaction=return_sale,
                     product=product,
                     quantity=return_qty,
                     unit_price=original_item.unit_price,
                     cost_price=original_item.cost_price,
-                    line_total=line_total
+                    line_total=line_total,
+                    unit_type=original_item.unit_type or 'ชิ้น',      
+                    display_sku=original_item.display_sku or product.sku,  
+                    bundle_items=original_item.bundle_items
                 )
                 
                 total_amount += line_total
@@ -289,28 +292,42 @@ def post_return(return_sale):
             # ✅ คืนสต็อก
             for item in return_sale.items.select_related('product').all():
                 
-                # ดึง Product (Lock Row)
-                product = Product.objects.select_for_update().get(id=item.product.id)
-                
-                # ✅ คืนสต็อกเข้าคลัง
-                product.quantity += item.quantity
-                product.save(update_fields=['quantity'])
-                
-                # บันทึก Stock Movement (IN = คืนเข้า)
-                StockMovement.objects.create(
-                    product=item.product,
-                    movement_type='IN',
-                    quantity=item.quantity,
-                    cost=item.cost_price,
-                    balance_after=product.quantity,
-                    reference=return_sale.doc_no,
-                    note=f"รับคืนจากบิล: {return_sale.ref_doc_no}"
-                )
+                # ⭐ ถ้ามี bundle_items → คืนทุก SKU
+                if item.bundle_items:
+                    for product_id in item.bundle_items:
+                        product = Product.objects.select_for_update().get(id=product_id)
+                        product.quantity += int(item.quantity)
+                        product.save(update_fields=['quantity'])
+                        
+                        StockMovement.objects.create(
+                            product=product,
+                            movement_type='IN',
+                            quantity=item.quantity,
+                            unit_cost=item.cost_price,
+                            balance_after=product.quantity,
+                            reference=return_sale.doc_no,
+                            note=f"รับคืน{item.unit_type} {return_sale.ref_doc_no}"
+                        )
+                else:
+                    # คืนปกติ
+                    product = Product.objects.select_for_update().get(id=item.product.id)
+                    product.quantity += int(item.quantity)
+                    product.save(update_fields=['quantity'])
+                    
+                    StockMovement.objects.create(
+                        product=item.product,
+                        movement_type='IN',
+                        quantity=item.quantity,
+                        unit_cost=item.cost_price,
+                        balance_after=product.quantity,
+                        reference=return_sale.doc_no,
+                        note=f"รับคืนจากบิล: {return_sale.ref_doc_no}"
+                    )
             
             # เปลี่ยนสถานะ
             return_sale.status = 'POSTED'
-            return_sale.sale_date = timezone.now()
-            return_sale.save(update_fields=['status', 'sale_date'])
+            return_sale.transaction_date = timezone.now()
+            return_sale.save(update_fields=['status', 'transaction_date'])
             
             return True
             
@@ -356,32 +373,45 @@ def cancel_return(return_sale):
             # ⚠️ ตัดสต็อกออกอีกครั้ง (เพราะเคยคืนเข้าไปแล้ว)
             for item in return_sale.items.select_related('product').all():
                 
-                # ดึง Product (Lock Row)
-                product = Product.objects.select_for_update().get(id=item.product.id)
-                
-                # ✅ เช็คสต็อกพอหรือไม่
-                if product.quantity < item.quantity:
-                    raise ValueError(
-                        f"ไม่สามารถยกเลิกได้\n"
-                        f"สต็อก {product.name} ไม่พอ\n"
-                        f"ต้องการ: {item.quantity} {product.unit}\n"
-                        f"เหลือ: {product.quantity} {product.unit}"
+                # ⭐ ถ้ามี bundle_items → ตัดทุก SKU
+                if item.bundle_items:
+                    for product_id in item.bundle_items:
+                        product = Product.objects.select_for_update().get(id=product_id)
+                        
+                        if product.quantity < item.quantity:
+                            raise ValueError(f"สต็อก {product.name} ไม่พอ")
+                        
+                        product.quantity -= int(item.quantity)
+                        product.save(update_fields=['quantity'])
+                        
+                        StockMovement.objects.create(
+                            product=product,
+                            movement_type='OUT',
+                            quantity=item.quantity,
+                            unit_cost=item.cost_price,
+                            balance_after=product.quantity,
+                            reference=f'CANCEL-{return_sale.doc_no}',
+                            note=f"ยกเลิกการรับคืน{item.unit_type}"
+                        )
+                else:
+                    # ตัดปกติ
+                    product = Product.objects.select_for_update().get(id=item.product.id)
+                    
+                    if product.quantity < item.quantity:
+                        raise ValueError(f"สต็อก {product.name} ไม่พอ")
+                    
+                    product.quantity -= int(item.quantity)
+                    product.save(update_fields=['quantity'])
+                    
+                    StockMovement.objects.create(
+                        product=item.product,
+                        movement_type='OUT',
+                        quantity=item.quantity,
+                        unit_cost=item.cost_price,
+                        balance_after=product.quantity,
+                        reference=f'CANCEL-{return_sale.doc_no}',
+                        note=f"ยกเลิกการรับคืน"
                     )
-                
-                # ⚠️ ตัดสต็อกออก
-                product.quantity -= item.quantity
-                product.save(update_fields=['quantity'])
-                
-                # บันทึก Stock Movement (OUT = ตัดออก)
-                StockMovement.objects.create(
-                    product=item.product,
-                    movement_type='OUT',
-                    quantity=item.quantity,
-                    cost=item.cost_price,
-                    balance_after=product.quantity,
-                    reference=f'CANCEL-{return_sale.doc_no}',
-                    note=f"ยกเลิกการรับคืน"
-                )
             
             # เปลี่ยนสถานะ
             return_sale.status = 'CANCELLED'
@@ -423,7 +453,7 @@ def get_return_summary(return_sale):
     return {
         'doc_no': return_sale.doc_no,
         'ref_doc_no': return_sale.ref_doc_no,
-        'sale_date': return_sale.sale_date,
+        'sale_date': return_sale.transaction_date,
         'status': return_sale.get_status_display(),
         'total_items': total_items,
         'total_quantity': float(total_quantity),
@@ -454,12 +484,12 @@ def validate_return_items(ref_doc_no, items_data):
     
     # ค้นหาบิลเดิม
     try:
-        original_sale = Sale.objects.get(
+        original_sale = Transaction.objects.get(
             doc_no=ref_doc_no,
             doc_type='SALE',
             status='POSTED'
         )
-    except Sale.DoesNotExist:
+    except Transaction.DoesNotExist:
         errors.append(f"ไม่พบบิล: {ref_doc_no}")
         return False, errors
     
@@ -496,7 +526,7 @@ def validate_return_items(ref_doc_no, items_data):
         # ตรวจสอบว่ามีในบิลเดิมหรือไม่
         try:
             original_item = original_sale.items.get(product=product)
-        except SaleItem.DoesNotExist:
+        except TransactionItem.DoesNotExist:
             errors.append(f"รายการที่ {i+1} ({product.name}): ไม่มีในบิลเดิม")
             continue
         
@@ -527,12 +557,12 @@ def get_returnable_items(ref_doc_no):
     """
     
     try:
-        original_sale = Sale.objects.get(
+        original_sale = Transaction.objects.get(
             doc_no=ref_doc_no,
             doc_type='SALE',
             status='POSTED'
         )
-    except Sale.DoesNotExist:
+    except Transaction.DoesNotExist:
         return []
     
     # เช็คความพร้อม
@@ -581,12 +611,12 @@ def calculate_refund_amount(ref_doc_no, items_data, discount_return=0):
     """
     
     try:
-        original_sale = Sale.objects.get(
+        original_sale = Transaction.objects.get(
             doc_no=ref_doc_no,
             doc_type='SALE',
             status='POSTED'
         )
-    except Sale.DoesNotExist:
+    except Transaction.DoesNotExist:
         return Decimal('0')
     
     total = Decimal('0')
@@ -596,7 +626,7 @@ def calculate_refund_amount(ref_doc_no, items_data, discount_return=0):
             original_item = original_sale.items.get(product_id=item_data['product_id'])
             quantity = Decimal(str(item_data['quantity']))
             total += original_item.unit_price * quantity
-        except SaleItem.DoesNotExist:
+        except TransactionItem.DoesNotExist:
             continue
     
     refund_amount = total - Decimal(str(discount_return))

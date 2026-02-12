@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from itertools import product
 
 from django.db import transaction
 from django.utils import timezone
@@ -11,6 +12,7 @@ from django.core.paginator import Paginator
 # ✅ เพิ่ม import user_passes_test
 from django.contrib.auth.decorators import login_required, user_passes_test
 
+from products.Services.product_service import ProductService
 from products.models import Product, Category, StockMovement 
 
 # =========================================================
@@ -24,7 +26,7 @@ def is_superuser_check(user):
 # =========================================================
 
 @login_required
-@user_passes_test(is_superuser_check) # 🔒 ล็อกสิทธิ์
+@user_passes_test(is_superuser_check)
 def manage_products(request):
     """แสดงรายการสินค้าทั้งหมด พร้อมค้นหาและกรอง"""
     
@@ -33,8 +35,9 @@ def manage_products(request):
     category_id = request.GET.get('category', '')
     stock_status = request.GET.get('stock_status', '')
     
-    # ===== Query สินค้า (ไม่ต้อง prefetch prices) =====
-    products = Product.objects.select_related('category').order_by('sku')
+    # ===== Query สินค้า =====
+    # prefetch_related bundle_components เพื่อลด query เวลาคำนวณสต็อก
+    products = Product.objects.select_related('category').prefetch_related('bundle_components').order_by('sku')
     
     # ค้นหา
     if search:
@@ -47,37 +50,36 @@ def manage_products(request):
     if category_id:
         products = products.filter(category_id=category_id)
     
-    # ✅ กรองตามสถานะสต็อก
+    # ✅ กรองตามสถานะสต็อก (ปรับปรุงใหม่ รองรับ Bundle)
     if stock_status:
         products_list = []
+        # หมายเหตุ: การวน loop กรองแบบนี้อาจช้าถ้าสินค้าเยอะมาก 
+        # แต่อยู่ในขอบเขตที่ยอมรับได้สำหรับระบบจัดการหลังบ้าน
         for p in products:
-            try:
-                # แก้ไข: ใช้ p.quantity โดยตรง (เพราะรวมตารางแล้ว)
-                stock = p.quantity
-            except:
-                stock = 0
+            # ใช้ Service คำนวณสต็อกจริง (รวมถึง Bundle)
+            status_data = ProductService.get_stock_status(p)
+            qty = status_data['quantity']
             
-            if stock_status == 'in_stock' and stock > 10:
+            if stock_status == 'in_stock' and qty > 10:
                 products_list.append(p)
-            elif stock_status == 'low_stock' and 0 < stock <= 10:
+            elif stock_status == 'low_stock' and 0 < qty <= 10:
                 products_list.append(p)
-            elif stock_status == 'out_of_stock' and stock <= 0:
+            elif stock_status == 'out_of_stock' and qty <= 0:
                 products_list.append(p)
         
         products = products_list
     
     # ===== Pagination =====
-    paginator = Paginator(products, 50)
+    paginator = Paginator(products, 20)
     page = request.GET.get('page', 1)
     products_page = paginator.get_page(page)
     
-    # ===== เพิ่ม stock_quantity ให้แต่ละสินค้า =====
+    # ===== เพิ่ม stock_quantity ให้แต่ละสินค้า (สำหรับแสดงผล) =====
     for product in products_page:
-        try:
-            # แก้ไข: ใช้ product.quantity โดยตรง
-            product.stock_quantity = product.quantity
-        except:
-            product.stock_quantity = 0
+        # ✅ เรียกใช้ Service คำนวณสต็อกที่จะโชว์
+        # ถ้าเป็น Bundle มันจะไปนับลูกมาให้ ถ้าเป็นปกติก็โชว์ตามจริง
+        status_data = ProductService.get_stock_status(product)
+        product.stock_quantity = status_data['quantity'] # แปะค่ากลับเข้าไปเพื่อเอาไปโชว์ใน HTML
     
     # ===== Context =====
     context = {
@@ -93,7 +95,7 @@ def manage_products(request):
 
 
 @login_required
-@user_passes_test(is_superuser_check) # 🔒 ล็อกสิทธิ์
+@user_passes_test(is_superuser_check)
 def edit_product(request, product_id):
     """แก้ไขข้อมูลสินค้า"""
     product = get_object_or_404(Product, id=product_id)
@@ -111,14 +113,16 @@ def edit_product(request, product_id):
             unit = request.POST.get('unit', '').strip()
             min_quantity = request.POST.get('min_quantity', 0)
             description = request.POST.get('description', '')
-            is_active = request.POST.get('is_active') == 'on' # Checkbox returns 'on' if checked
+            
+            # Checkbox
+            is_active = request.POST.get('is_active') == 'on'
+            is_bundle = request.POST.get('is_bundle') == 'on' # ✅ รับค่า is_bundle
 
-            # Validation: เช็ค SKU ซ้ำ (ถ้ามีการเปลี่ยน SKU)
+            # Validation
             if sku != product.sku and Product.objects.filter(sku=sku).exists():
                 messages.error(request, f"❌ รหัสสินค้า '{sku}' มีอยู่ในระบบแล้ว")
                 return redirect('edit_product', product_id=product_id)
 
-            # Validation: เช็คข้อมูลจำเป็น
             if not sku or not name:
                 messages.error(request, "❌ กรุณากรอกรหัสสินค้าและชื่อสินค้า")
                 return redirect('edit_product', product_id=product_id)
@@ -134,12 +138,8 @@ def edit_product(request, product_id):
             product.min_quantity = int(min_quantity)
             product.description = description
             product.is_active = is_active
+            product.is_bundle = is_bundle # ✅ บันทึกค่า is_bundle
 
-            # จัดการรูปภาพ (ถ้ามีการอัปโหลดใหม่)
-            if 'image' in request.FILES:
-                product.image = request.FILES['image']
-            
-            # บันทึก
             product.save()
 
             messages.success(request, f"✅ บันทึกข้อมูลสินค้า '{product.name}' เรียบร้อยแล้ว")
@@ -149,7 +149,6 @@ def edit_product(request, product_id):
             messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
             return redirect('edit_product', product_id=product_id)
 
-    # กรณี GET Request: แสดงฟอร์ม
     context = {
         'product': product,
         'categories': categories,
@@ -310,20 +309,34 @@ def delete_product(request, product_id):
 @login_required
 @user_passes_test(is_superuser_check) # 🔒 ล็อกสิทธิ์
 def product_history(request, product_id):
-    """ดูประวัติการเคลื่อนไหวสินค้า"""
+    """ดูประวัติการเคลื่อนไหวสินค้า (รองรับ Bundle ให้โชว์ลูกด้วย)"""
     
     product = get_object_or_404(Product, id=product_id)
     
-    movements = StockMovement.objects.filter(
-        product=product
-    ).order_by('-created_at')
-    
+    # =========================================================
+    # ✅ ส่วนที่แก้ไข: Logic การดึง Movement
+    # =========================================================
+    if product.is_bundle:
+        # 1. ถ้าเป็นชุด (แม่) -> ให้ไปดึง ID ของลูกๆ มาด้วย
+        product = get_object_or_404(Product, id=product_id)
+        
+        # 2. ค้นหา Movement ที่เป็นของ "ตัวแม่" OR "ลูกๆ"
+        movements = StockMovement.objects.filter(product=product).order_by('-created_at') # select_related เพื่อดึงชื่อสินค้าลูกมาแสดง
+        
+    else:
+        # 3. ถ้าเป็นสินค้าปกติ -> ดึงแค่ของตัวเอง
+        movements = StockMovement.objects.filter(
+            product=product
+        ).order_by('-created_at')
+    # =========================================================
+
     total_in = movements.filter(movement_type='IN').aggregate(Sum('quantity'))['quantity__sum'] or 0
     total_out = movements.filter(movement_type='OUT').aggregate(Sum('quantity'))['quantity__sum'] or 0
     
+    # ✅ ปรับปรุง: ใช้ Service คำนวณสต็อกคงเหลือ (เพื่อให้แม่โชว์จำนวนชุดที่ขายได้จริง)
     try:
-        # แก้ไข: ใช้ product.quantity โดยตรง
-        current_stock = product.quantity
+        status_data = ProductService.get_stock_status(product)
+        current_stock = status_data.get('quantity', 0)
     except:
         current_stock = 0
     
